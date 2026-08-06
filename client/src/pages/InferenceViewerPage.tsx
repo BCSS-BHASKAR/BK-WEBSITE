@@ -352,7 +352,11 @@ export function InferenceViewerPage() {
                       />
                       <Chip
                         size="small"
-                        label={`${fmtDwell(r.dwell_seconds)} · ${fmtBytes(r.size_bytes)}`}
+                        label={[
+                          // dwell only exists on loitering rows; All Media has none
+                          r.dwell_seconds != null ? fmtDwell(r.dwell_seconds) : null,
+                          fmtBytes(r.size_bytes) || null,
+                        ].filter(Boolean).join(" · ")}
                         sx={{
                           position: "absolute", bottom: 8, right: 8, height: 22, fontSize: 11,
                           bgcolor: "rgba(0,0,0,.7)", color: "#fff",
