@@ -95,6 +95,9 @@ const MODULES = {
   loitering:  { table: "loitering_event",      alias: "l", ts: "l.started_at",   cam: "l.stream" },
   intrusion:  { table: "intrusion_event",      alias: "i", ts: "i.occurred_at",  cam: "i.camera_key" },
   after_hours:{ table: "after_hours_sighting", alias: "s", ts: "s.captured_at",  cam: "s.camera_key" },
+  // Empty until the on-prem service writes uploads/kitchen_unattended/, but
+  // wired up so the module behaves like the others rather than 404ing.
+  kitchen_unattended: { table: "kitchen_unattended_event", alias: "k", ts: "k.started_at", cam: "k.camera_key" },
 };
 
 /**
@@ -540,6 +543,34 @@ router.get("/stats", async (req, res) => {
   }
 });
 
+/** Kitchen unattended. Empty until the on-prem service starts writing. */
+router.get("/kitchen-unattended", async (req, res) => {
+  try {
+    const { page, pageSize, offset } = paginate(req);
+    const f = buildFilters(req, "k.started_at", "k.camera_key");
+    const w = [f.sql.replace(/^WHERE /, "")].filter(Boolean);
+    const params = [...f.params];
+    w.push(notFalsePositive("kitchen_unattended", "k.id"));
+    const search = searchClause(req, ["k.camera_key", "k.id"]);
+    if (search) { w.push(search.sql); params.push(...search.params); }
+    const sql = `WHERE ${w.join(" AND ")}`;
+    const ord = orderBy(req, {
+      detectedAt: "k.started_at", duration: "k.duration_seconds", camera: "k.camera_key",
+    }, "k.started_at DESC");
+    await listEndpoint(res, {
+      countSql: `SELECT COUNT(*) AS total FROM kitchen_unattended_event k ${sql}`,
+      rowsSql: `SELECT k.id, k.camera_key, k.started_at, k.duration_seconds AS dwell_seconds,
+                       m.s3_key, m.size_bytes, m.content_type, m.id AS asset_id
+                  FROM kitchen_unattended_event k LEFT JOIN media_asset m ON m.id = k.asset_id
+                  ${sql} ORDER BY ${ord} LIMIT ? OFFSET ?`,
+      params, page, pageSize, offset,
+    });
+  } catch (e) {
+    console.error("inference kitchen-unattended", e);
+    res.status(500).json({ error: "server_error" });
+  }
+});
+
 /**
  * Per-module KPI block for a Monitoring page header.
  *
@@ -559,7 +590,8 @@ router.get("/kpis/:module", async (req, res) => {
 
     // Duration only exists on loitering; confidence only on walk-ins. Selecting
     // NULL keeps one query shape without inventing columns the data lacks.
-    const dur = req.params.module === "loitering" ? "l.dwell_seconds" : "NULL::int";
+    const dur = req.params.module === "loitering" ? "l.dwell_seconds"
+      : req.params.module === "kitchen_unattended" ? "k.duration_seconds" : "NULL::int";
     const conf = req.params.module === "walkins" ? "d.confidence" : "NULL::numeric";
 
     const [[row]] = await pool.query(
@@ -746,6 +778,7 @@ router.get("/export/:module.csv", async (req, res) => {
     const where = `WHERE ${w.join(" AND ")}`;
     const extra =
       req.params.module === "loitering" ? ", l.dwell_seconds AS duration_seconds, l.global_id"
+      : req.params.module === "kitchen_unattended" ? ", k.duration_seconds"
       : req.params.module === "walkins" ? ", d.track_id, d.confidence, d.upper_garment, d.lower_garment"
       : req.params.module === "after_hours" ? ", s.tag"
       : "";
