@@ -1,10 +1,16 @@
+import { useEffect, useMemo, useState } from "react";
 import { Box, Chip, Stack, Typography } from "@mui/material";
 import { useQuery } from "@tanstack/react-query";
 import CircleIcon from "@mui/icons-material/Circle";
 import { InferenceAnalyticsView } from "../components/dashboard/InferenceAnalyticsView";
+import { MastheadDashboardToolbar } from "../components/MastheadDashboardToolbar";
+import { useShellHeader } from "../context/ShellHeaderContext";
 import { pageLayoutSx } from "../lib/uiSurfaces";
 import { api } from "../lib/api";
 import { useAutoRefreshMs } from "../lib/useAppSettings";
+import {
+  type DatePreset, datedRangeFromPreset, defaultLast7Range, normalizeCustomRange,
+} from "../lib/dashboardRange";
 
 // The dashboard is an analytical view over what the on-prem CV services
 // actually capture (walk-ins, loitering, intrusion, after-hours), read from the
@@ -12,10 +18,8 @@ import { useAutoRefreshMs } from "../lib/useAppSettings";
 //
 // It previously rendered DashboardOperationalView, which queried the legacy
 // ANPR tables - vehicle reads, plate analytics, traffic violations. Nothing
-// writes to those at this site (the S3 bucket carries no vehicle data at all),
-// so every tile and chart on it read zero. That component is left in the tree,
-// unreferenced, rather than deleted, in case the vehicle module is ever
-// commissioned here.
+// writes to those at this site, so every tile read zero. That component is left
+// in the tree, unreferenced, in case the vehicle module is ever commissioned.
 
 function IngestStatus() {
   const { data } = useQuery({
@@ -43,6 +47,42 @@ function IngestStatus() {
 
 export function DashboardPage() {
   const refreshSecs = Math.round(useAutoRefreshMs() / 1000);
+  const { setRightSlot } = useShellHeader();
+
+  // Date range lives here and drives every query below, restoring the masthead
+  // range control the operational dashboard used to carry.
+  const [preset, setPreset] = useState<DatePreset>("last7");
+  const initial = defaultLast7Range();
+  const [customFrom, setCustomFrom] = useState(initial.from);
+  const [customTo, setCustomTo] = useState(initial.to);
+
+  const { from, to } = useMemo(() => {
+    if (preset === "custom") return normalizeCustomRange(customFrom, customTo);
+    return datedRangeFromPreset(preset, customFrom, customTo);
+  }, [preset, customFrom, customTo]);
+
+  useEffect(() => {
+    setRightSlot(
+      <MastheadDashboardToolbar
+        preset={preset}
+        onPresetChange={setPreset}
+        customFrom={customFrom}
+        customTo={customTo}
+        onCustomFromChange={setCustomFrom}
+        onCustomToChange={setCustomTo}
+        resolvedFrom={from}
+        resolvedTo={to}
+        onResetToToday={() => {
+          const d = defaultLast7Range();
+          setPreset("last7");
+          setCustomFrom(d.from);
+          setCustomTo(d.to);
+        }}
+      />
+    );
+    return () => setRightSlot(null);
+  }, [setRightSlot, preset, customFrom, customTo, from, to]);
+
   return (
     <Box sx={pageLayoutSx}>
       <Stack
@@ -61,7 +101,7 @@ export function DashboardPage() {
         presence — with activity trends, timing, camera coverage and the latest evidence.
       </Typography>
 
-      <InferenceAnalyticsView />
+      <InferenceAnalyticsView from={from} to={to} />
     </Box>
   );
 }

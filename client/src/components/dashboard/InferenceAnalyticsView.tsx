@@ -1,10 +1,8 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { Box, Chip, CircularProgress, Grid, Paper, Stack, Tooltip, Typography } from "@mui/material";
 import {
-  Area,
-  AreaChart,
   Bar,
   BarChart,
   CartesianGrid,
@@ -18,6 +16,8 @@ import { api } from "../../lib/api";
 import { contentCardSx } from "../../lib/uiSurfaces";
 import { MODULE_BY_KEY, type InferenceModuleKey } from "../../lib/inferenceModules";
 import { useAutoRefreshMs } from "../../lib/useAppSettings";
+import { MonitoringMediaViewer } from "../monitoring/MonitoringMediaViewer";
+import type { MonitoringRow } from "../monitoring/MonitoringEventsTable";
 
 // ---------------------------------------------------------------------------
 // Palette
@@ -70,10 +70,6 @@ function fmtDateTime(ts?: string | null) {
     hour: "2-digit", minute: "2-digit", hour12: false,
   });
 }
-function fmtDay(ts: string) {
-  const d = new Date(ts);
-  return d.toLocaleDateString("en-GB", { timeZone: "UTC", day: "2-digit", month: "short" });
-}
 function fmtBytes(n?: number | string | null) {
   const v = Number(n || 0);
   if (!v) return "0";
@@ -122,17 +118,23 @@ function ChartCard({ title, subtitle, height = 190, children }: {
   );
 }
 
-export function InferenceAnalyticsView() {
+export function InferenceAnalyticsView({ from, to }: { from?: string; to?: string } = {}) {
   const navigate = useNavigate();
   const refetchInterval = useAutoRefreshMs();
+  // Latest captures open in the same viewer the Monitoring pages use.
+  const [captureIndex, setCaptureIndex] = useState<number | null>(null);
   const { data: stats, isLoading: lStats } = useQuery({
-    queryKey: ["inference", "stats", 14],
-    queryFn: async () => (await api.get("/inference/stats", { params: { days: 14 } })).data as Stats,
+    queryKey: ["inference", "stats", from, to],
+    queryFn: async () =>
+      (await api.get("/inference/stats", {
+        params: { days: 14, ...(from && to ? { from, to } : {}) },
+      })).data as Stats,
     refetchInterval,
   });
   const { data: summary, isLoading: lSum } = useQuery({
-    queryKey: ["inference", "summary"],
-    queryFn: async () => (await api.get("/inference/summary")).data as Summary,
+    queryKey: ["inference", "summary", from, to],
+    queryFn: async () =>
+      (await api.get("/inference/summary", { params: from && to ? { from, to } : {} })).data as Summary,
     refetchInterval,
   });
   const { data: recent } = useQuery({
@@ -147,18 +149,44 @@ export function InferenceAnalyticsView() {
     },
   });
 
-  /** byDay is (day, service) long-form; pivot to one series per service. */
+  /**
+   * byDay only contains days that HAVE data. Plotting those directly drew a
+   * two-point diagonal across a 14-day window - a trend that is not there.
+   * Build the full day axis for the range and zero-fill so the shape is real.
+   */
   const perService = useMemo(() => {
-    const days = Array.from(new Set((stats?.byDay || []).map((r) => r.day))).sort();
+    const present = (stats?.byDay || []).map((r) => String(r.day).slice(0, 10)).sort();
+    let start: Date;
+    let end: Date;
+    if (from && to) {
+      start = new Date(`${from}T00:00:00Z`);
+      end = new Date(`${to}T00:00:00Z`);
+    } else if (present.length) {
+      start = new Date(`${present[0]}T00:00:00Z`);
+      end = new Date(`${present[present.length - 1]}T00:00:00Z`);
+    } else {
+      end = new Date();
+      start = new Date(end.getTime() - 6 * 86400000);
+    }
+    const days: string[] = [];
+    for (let d = new Date(start); d <= end && days.length < 92; d.setUTCDate(d.getUTCDate() + 1)) {
+      days.push(d.toISOString().slice(0, 10));
+    }
+    const lookup = new Map(
+      (stats?.byDay || []).map((r) => [`${String(r.day).slice(0, 10)}|${r.service}`, Number(r.n)])
+    );
     return SERVICES.map((svc) => ({
       service: svc,
       total: (stats?.byDay || []).filter((r) => r.service === svc).reduce((a, r) => a + Number(r.n), 0),
       points: days.map((d) => ({
         day: d,
-        n: Number((stats?.byDay || []).find((r) => r.day === d && r.service === svc)?.n || 0),
+        label: new Date(`${d}T00:00:00Z`).toLocaleDateString("en-GB", {
+          timeZone: "UTC", day: "2-digit", month: "short",
+        }),
+        n: lookup.get(`${d}|${svc}`) || 0,
       })),
     }));
-  }, [stats]);
+  }, [stats, from, to]);
 
   // Every hour present so the shape of the day is honest, not just hours with data.
   const hourly = useMemo(() => {
@@ -221,27 +249,20 @@ export function InferenceAnalyticsView() {
           <Grid key={s.service} size={{ xs: 12, sm: 6, md: 3 }}>
             <ChartCard title={SERVICE_LABEL[s.service]} subtitle={`${s.total} events`} height={140}>
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={s.points} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id={`g-${s.service}`} x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor={SERVICE_COLOUR[s.service]} stopOpacity={0.35} />
-                      <stop offset="100%" stopColor={SERVICE_COLOUR[s.service]} stopOpacity={0.02} />
-                    </linearGradient>
-                  </defs>
+                {/* Daily counts are discrete per-day events, so bars are the
+                    honest form. An interpolated area implied continuous change
+                    between two sampled days. */}
+                <BarChart data={s.points} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
                   <CartesianGrid stroke={GRID} vertical={false} />
-                  <XAxis dataKey="day" tickFormatter={fmtDay} tick={{ fontSize: 10, fill: INK_MUTED }}
-                         axisLine={false} tickLine={false} minTickGap={18} />
+                  <XAxis dataKey="label" tick={{ fontSize: 9, fill: INK_MUTED }}
+                         axisLine={false} tickLine={false} interval="preserveStartEnd" minTickGap={10} />
                   <YAxis allowDecimals={false} width={30} tick={{ fontSize: 10, fill: INK_MUTED }}
                          axisLine={false} tickLine={false} tickMargin={4} />
-                  <RTooltip
-                    labelFormatter={(v) => fmtDay(String(v))}
-                    formatter={(v) => [Number(v ?? 0), SERVICE_LABEL[s.service]] as [number, string]}
-                    contentStyle={{ fontSize: 12, borderRadius: 8 }}
-                  />
-                  {/* 2px line, soft fill beneath */}
-                  <Area type="monotone" dataKey="n" stroke={SERVICE_COLOUR[s.service]} strokeWidth={2}
-                        fill={`url(#g-${s.service})`} dot={false} activeDot={{ r: 4 }} />
-                </AreaChart>
+                  <RTooltip cursor={{ fill: "rgba(0,0,0,.04)" }}
+                            formatter={(v) => [Number(v ?? 0), SERVICE_LABEL[s.service]] as [number, string]}
+                            contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+                  <Bar dataKey="n" fill={SERVICE_COLOUR[s.service]} radius={[3, 3, 0, 0]} maxBarSize={22} />
+                </BarChart>
               </ResponsiveContainer>
             </ChartCard>
           </Grid>
@@ -348,11 +369,19 @@ export function InferenceAnalyticsView() {
           <Paper sx={{ ...contentCardSx, p: 2, height: "100%" }}>
             <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Latest captures</Typography>
             <Grid container spacing={1}>
-              {(recent?.rows || []).slice(0, 12).map((r: any) => {
+              {(recent?.rows || []).slice(0, 12).map((r: any, i: number) => {
                 const thumb = r.posterUrl || (String(r.content_type || "").startsWith("image") ? r.mediaUrl : null);
                 return (
                   <Grid key={`${r.service}-${r.id}`} size={{ xs: 4, sm: 3 }}>
-                    <Box sx={{ position: "relative", borderRadius: 1.5, overflow: "hidden", bgcolor: "#0e0e12", height: 74 }}>
+                    <Box
+                      onClick={() => setCaptureIndex(i)}
+                      sx={{
+                        position: "relative", borderRadius: 1.5, overflow: "hidden",
+                        bgcolor: "#0e0e12", height: 74, cursor: "pointer",
+                        transition: "transform 140ms ease, box-shadow 140ms ease",
+                        "&:hover": { transform: "scale(1.03)", boxShadow: "0 4px 12px rgba(0,0,0,.28)" },
+                      }}
+                    >
                       {thumb ? (
                         <Box component="img" src={thumb} alt={r.service} loading="lazy"
                              sx={{ width: "100%", height: "100%", objectFit: "cover" }} />
@@ -381,6 +410,22 @@ export function InferenceAnalyticsView() {
           </Paper>
         </Grid>
       </Grid>
+
+      {/* Reuses the Monitoring viewer, so a capture opened from the dashboard
+          behaves identically - video plays, Previous/Next steps through the
+          latest set, and the feedback controls are the same. */}
+      {captureIndex !== null && (recent?.rows || [])[captureIndex] && (
+        <MonitoringMediaViewer
+          open
+          module={MODULE_BY_KEY[((recent!.rows[captureIndex].service) as InferenceModuleKey)] ?? MODULE_BY_KEY.intrusion}
+          rows={(recent?.rows || []).slice(0, 12).map((r: any) => ({ ...r, detected_at: r.occurred_at })) as MonitoringRow[]}
+          index={captureIndex}
+          onIndexChange={setCaptureIndex}
+          onClose={() => setCaptureIndex(null)}
+          verdictFor={() => null}
+          onFeedback={() => {}}
+        />
+      )}
     </Box>
   );
 }

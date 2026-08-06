@@ -520,21 +520,39 @@ router.get("/media", async (req, res) => {
 /** Activity buckets for the dashboard charts. */
 router.get("/stats", async (req, res) => {
   try {
+    // Accepts an explicit from/to range (what the dashboard's date filter
+    // sends) and falls back to a rolling window when none is given.
+    const dateRe = /^\d{4}-\d{2}-\d{2}$/;
+    const from = String(req.query.from || "").trim();
+    const to = String(req.query.to || "").trim();
     const days = Math.min(90, Math.max(1, Number(req.query.days) || 14));
+
+    const where = [];
+    const params = [];
+    if (dateRe.test(from)) { where.push("occurred_at >= (?::date AT TIME ZONE 'Asia/Kolkata')"); params.push(from); }
+    if (dateRe.test(to)) { where.push("occurred_at < ((?::date + 1) AT TIME ZONE 'Asia/Kolkata')"); params.push(to); }
+    if (!where.length) { where.push("occurred_at > now() - (?::int * interval '1 day')"); params.push(days); }
+    // Suppressed detections never appear in any chart.
+    where.push(`NOT EXISTS (SELECT 1 FROM false_positive_detection f
+                             WHERE f.module = inference_timeline.service
+                               AND f.detection_id = inference_timeline.id)`);
+    const rangeSql = `WHERE ${where.join(" AND ")}`;
+
     const [byDay] = await pool.query(
       `SELECT (occurred_at AT TIME ZONE 'Asia/Kolkata')::date AS day, service, COUNT(*) AS n
-         FROM inference_timeline
-        WHERE occurred_at > now() - ($1::int * interval '1 day')
-        GROUP BY 1, 2 ORDER BY 1`.replace("$1", "?"),
-      [days]
+         FROM inference_timeline ${rangeSql}
+        GROUP BY 1, 2 ORDER BY 1`,
+      params
     );
     const [byHour] = await pool.query(
       `SELECT EXTRACT(HOUR FROM occurred_at AT TIME ZONE 'Asia/Kolkata')::int AS hour, COUNT(*) AS n
-         FROM inference_timeline GROUP BY 1 ORDER BY 1`
+         FROM inference_timeline ${rangeSql} GROUP BY 1 ORDER BY 1`,
+      params
     );
     const [byCamera] = await pool.query(
       `SELECT service, camera_key, COUNT(*) AS n, MAX(occurred_at) AS latest
-         FROM inference_timeline GROUP BY 1, 2 ORDER BY n DESC`
+         FROM inference_timeline ${rangeSql} GROUP BY 1, 2 ORDER BY n DESC`,
+      params
     );
     res.json({ byDay, byHour, byCamera });
   } catch (e) {
