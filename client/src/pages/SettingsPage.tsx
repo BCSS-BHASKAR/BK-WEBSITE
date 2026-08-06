@@ -1,14 +1,19 @@
 import { useEffect, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Alert, Box, Button, Chip, CircularProgress, Divider, Grid, MenuItem, Paper,
-  Snackbar, Stack, Switch, TextField, Tooltip, Typography,
+  Snackbar, Stack, Switch, Tab, Tabs, TextField, Tooltip, Typography,
 } from "@mui/material";
 import CloudUploadOutlinedIcon from "@mui/icons-material/CloudUploadOutlined";
+import TuneOutlinedIcon from "@mui/icons-material/TuneOutlined";
+import AdminPanelSettingsOutlinedIcon from "@mui/icons-material/AdminPanelSettingsOutlined";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import { api } from "../lib/api";
 import { contentCardSx, pageLayoutSx } from "../lib/uiSurfaces";
 import { INFERENCE_MODULES } from "../lib/inferenceModules";
+import { RbacPanel } from "../components/settings/RbacPanel";
+import { usePermissions } from "../lib/permissions";
 
 type Scope = string;
 type SettingEntry = {
@@ -208,6 +213,14 @@ function SectionCard({
 export function SettingsPage() {
   const qc = useQueryClient();
   const [toast, setToast] = useState<string | null>(null);
+  const { can } = usePermissions();
+  const nav = useNavigate();
+  const loc = useLocation();
+
+  // RBAC lives here as a tab rather than its own nav entry. /settings/access
+  // still resolves so existing links keep working - it just selects the tab.
+  const showRbac = can("access_control");
+  const tab = loc.pathname.endsWith("/access") && showRbac ? "rbac" : "config";
 
   const { data, isLoading } = useQuery({
     queryKey: ["settings"],
@@ -229,9 +242,26 @@ export function SettingsPage() {
       <Box>
         <Typography variant="h5" sx={{ fontWeight: 800 }}>Settings</Typography>
         <Typography variant="body2" color="text.secondary">
-          Configure the application and the AI detection modules.
+          Configure the application, the AI detection modules and who can see what.
         </Typography>
       </Box>
+
+      <Paper sx={{ ...contentCardSx, p: 0 }}>
+        <Tabs
+          value={tab}
+          onChange={(_e, v) => nav(v === "rbac" ? "/settings/access" : "/settings")}
+          variant="scrollable"
+          scrollButtons="auto"
+        >
+          <Tab value="config" label="Configuration" icon={<TuneOutlinedIcon />} iconPosition="start" sx={{ minHeight: 48 }} />
+          {showRbac && (
+            <Tab value="rbac" label="RBAC" icon={<AdminPanelSettingsOutlinedIcon />} iconPosition="start" sx={{ minHeight: 48 }} />
+          )}
+        </Tabs>
+      </Paper>
+
+      {tab === "rbac" ? <RbacPanel /> : (
+      <>
 
       {/* The single most important thing an administrator needs to understand
           about this screen, stated plainly rather than buried. */}
@@ -269,6 +299,9 @@ export function SettingsPage() {
           );
         })}
       </Grid>
+
+      </>
+      )}
 
       <Snackbar
         open={Boolean(toast)} autoHideDuration={6000} onClose={() => setToast(null)}

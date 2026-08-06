@@ -20,7 +20,6 @@ import { DailyBriefingPage } from "./pages/DailyBriefingPage";
 import { InferenceViewerPage } from "./pages/InferenceViewerPage";
 import { MonitoringPage } from "./pages/MonitoringPage";
 import { SettingsPage } from "./pages/SettingsPage";
-import { AccessControlPage } from "./pages/AccessControlPage";
 import { PermissionsProvider, RequirePage } from "./lib/permissions";
 
 export default function App() {
@@ -48,7 +47,7 @@ export default function App() {
           <Route path="/monitoring/:module" element={<MonitoringPage />} />
           <Route path="/monitoring" element={<Navigate to="/monitoring/walkins" replace />} />
           <Route path="/settings" element={<RequirePage page="settings" label="Settings"><SettingsPage /></RequirePage>} />
-          <Route path="/settings/access" element={<RequirePage page="access_control" label="Users &amp; Access"><AccessControlPage /></RequirePage>} />
+          <Route path="/settings/access" element={<RequirePage page="access_control" label="RBAC"><SettingsPage /></RequirePage>} />
           <Route path="/daily-briefing" element={<RequirePage page="daily_briefing" label="AI Daily Briefing"><DailyBriefingPage /></RequirePage>} />
           {/* Legacy report routes now point at their Monitoring equivalents.
               Kept as redirects so existing links and bookmarks keep working. */}

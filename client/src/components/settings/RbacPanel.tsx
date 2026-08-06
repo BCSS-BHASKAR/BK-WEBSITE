@@ -10,10 +10,10 @@ import PersonAddAltIcon from "@mui/icons-material/PersonAddAlt";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import KeyOutlinedIcon from "@mui/icons-material/KeyOutlined";
 import VerifiedUserIcon from "@mui/icons-material/VerifiedUser";
-import { api } from "../lib/api";
-import { contentCardSx, pageLayoutSx } from "../lib/uiSurfaces";
-import { tableCellSx, tableHeadSx } from "../components/monitoring/monitoringTokens";
-import { usePermissions } from "../lib/permissions";
+import { api } from "../../lib/api";
+import { contentCardSx } from "../../lib/uiSurfaces";
+import { tableCellSx, tableHeadSx } from "../monitoring/monitoringTokens";
+import { usePermissions } from "../../lib/permissions";
 
 type Page = { key: string; label: string; group: string; route: string };
 type User = {
@@ -85,7 +85,7 @@ function PagePicker({
   );
 }
 
-export function AccessControlPage() {
+export function RbacPanel() {
   const qc = useQueryClient();
   const { role: myRole } = usePermissions();
   const [toast, setToast] = useState<string | null>(null);
@@ -176,10 +176,10 @@ export function AccessControlPage() {
   const users = usersQ.data?.users ?? [];
 
   return (
-    <Box sx={pageLayoutSx}>
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 2.5 }}>
       <Stack direction="row" sx={{ alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 1 }}>
         <Box>
-          <Typography variant="h5" sx={{ fontWeight: 800 }}>Users &amp; Access</Typography>
+          <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>Role-based access control</Typography>
           <Typography variant="body2" color="text.secondary">
             Add a user and tick the pages they can open. Administrators always have everything.
           </Typography>

@@ -49,7 +49,6 @@ import TimerOutlinedIcon from "@mui/icons-material/TimerOutlined";
 import ReportGmailerrorredOutlinedIcon from "@mui/icons-material/ReportGmailerrorredOutlined";
 import NightsStayOutlinedIcon from "@mui/icons-material/NightsStayOutlined";
 import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
-import AdminPanelSettingsOutlinedIcon from "@mui/icons-material/AdminPanelSettingsOutlined";
 import { usePermissions } from "../lib/permissions";
 
 const SHOW_SIDEBAR_STATUS_AND_PROFILE = false;
@@ -95,7 +94,6 @@ const nav: {
   { label: "Inference Viewer", path: "/inference", icon: <CameraOutdoorOutlinedIcon />, hiddenFromMenu: true },
   { label: "Known Faces", path: "/known-faces", icon: <FaceRetouchingNaturalOutlinedIcon />, page: "known_faces" },
   { label: "Settings", path: "/settings", icon: <SettingsOutlinedIcon />, page: "settings" },
-  { label: "Users & Access", path: "/settings/access", icon: <AdminPanelSettingsOutlinedIcon />, page: "access_control" },
 
   // Parked until the Python assistant services are deployed — drop
   // hiddenFromMenu to put it back in the sidebar.
