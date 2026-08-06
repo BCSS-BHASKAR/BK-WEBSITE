@@ -44,6 +44,10 @@ import ReceiptLongOutlinedIcon from "@mui/icons-material/ReceiptLongOutlined";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import FaceRetouchingNaturalOutlinedIcon from "@mui/icons-material/FaceRetouchingNaturalOutlined";
 import CameraOutdoorOutlinedIcon from "@mui/icons-material/CameraOutdoorOutlined";
+import TimerOutlinedIcon from "@mui/icons-material/TimerOutlined";
+import ReportGmailerrorredOutlinedIcon from "@mui/icons-material/ReportGmailerrorredOutlined";
+import NightsStayOutlinedIcon from "@mui/icons-material/NightsStayOutlined";
+import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
 
 const SHOW_SIDEBAR_STATUS_AND_PROFILE = false;
 
@@ -65,18 +69,26 @@ const nav: {
   vehicleModule?: boolean;
   // Kept routable (the dashboard still links here) but dropped from the menu.
   hiddenFromMenu?: boolean;
+  /** Renders a small caption above this item, starting a visual group. */
+  sectionLabel?: string;
+  /** Indented as a child of the section above it. */
+  child?: boolean;
 }[] = [
   { label: SITE_LABELS.operationalDashboardsNavShort, path: "/dashboard", icon: <DashboardIcon /> },
 
-  // These four mirror the dashboard KPI tiles — same label, same order, and the
-  // same destination as the tile's click-through.
-  { label: "Walk-ins", path: "/walkins-report", icon: <DirectionsWalkOutlinedIcon /> },
-  { label: "Kitchen Unattended", path: "/watchlists", icon: <SoupKitchenOutlinedIcon /> },
+  // One Monitoring page template serves all five inference types; each entry
+  // differs only by its route slug. See lib/inferenceModules.ts.
+  { label: "Walk-ins", path: "/monitoring/walkins", icon: <DirectionsWalkOutlinedIcon />, sectionLabel: "Monitoring", child: true },
+  { label: "Loitering", path: "/monitoring/loitering", icon: <TimerOutlinedIcon />, child: true },
+  { label: "Intrusion", path: "/monitoring/intrusion", icon: <ReportGmailerrorredOutlinedIcon />, child: true },
+  { label: "After Hours", path: "/monitoring/after-hours", icon: <NightsStayOutlinedIcon />, child: true },
+  { label: "Kitchen Unattended", path: "/monitoring/kitchen-unattended", icon: <SoupKitchenOutlinedIcon />, child: true },
+
   { label: "Active Alerts", path: "/crowds-report", icon: <WarningAmberRoundedIcon /> },
   { label: SITE_LABELS.liveView, path: "/live-view", icon: <VideocamRoundedIcon /> },
-
   { label: "Known Faces", path: "/known-faces", icon: <FaceRetouchingNaturalOutlinedIcon />, hiddenFromMenu: true },
-  { label: "Inference Viewer", path: "/inference", icon: <CameraOutdoorOutlinedIcon /> },
+  { label: "Inference Viewer", path: "/inference", icon: <CameraOutdoorOutlinedIcon />, hiddenFromMenu: true },
+  { label: "Settings", path: "/settings", icon: <SettingsOutlinedIcon /> },
 
   // Parked until the Python assistant services are deployed — drop
   // hiddenFromMenu to put it back in the sidebar.
@@ -261,6 +273,19 @@ function AppShellInner() {
       <List dense sx={{ mt: 0, flex: 1, py: 0 }}>
         {visibleNav.map((n) => {
           const selected = isNavActive(n.path, loc.pathname);
+          const sectionCaption =
+            n.sectionLabel && sidebarExpanded ? (
+              <Typography
+                key={`sec-${n.sectionLabel}`}
+                sx={{
+                  px: 2, pt: 1.5, pb: 0.5, fontSize: 10, fontWeight: 800,
+                  letterSpacing: "0.09em", textTransform: "uppercase",
+                  color: "rgba(248,250,252,0.45)",
+                }}
+              >
+                {n.sectionLabel}
+              </Typography>
+            ) : null;
           const disabled = n.path == null;
           
           const linkProps: any = !disabled && n.path
@@ -280,6 +305,7 @@ function AppShellInner() {
               aria-current={selected ? "page" : undefined}
               sx={{
                 ...navItemSx(selected, sidebarExpanded),
+                ...(n.child && sidebarExpanded ? { pl: 3.25 } : {}),
                 ...(disabled
                   ? {
                       opacity: 0.45,
@@ -323,12 +349,20 @@ function AppShellInner() {
             </ListItemButton>
           );
 
-          return sidebarExpanded ? (
+          const rendered = sidebarExpanded ? (
             item
           ) : (
             <Tooltip key={n.label} title={n.label} placement="right" arrow>
               <span>{item}</span>
             </Tooltip>
+          );
+
+          // A section caption cannot be a sibling of the item inside .map, so
+          // both are returned together under one fragment key.
+          return sectionCaption ? (
+            <Box key={`grp-${n.label}`}>{sectionCaption}{rendered}</Box>
+          ) : (
+            rendered
           );
         })}
       </List>

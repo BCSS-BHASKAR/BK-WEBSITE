@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import { Box, Chip, CircularProgress, Grid, Paper, Stack, Tooltip, Typography } from "@mui/material";
 import {
   Area,
@@ -15,6 +16,7 @@ import {
 } from "recharts";
 import { api } from "../../lib/api";
 import { contentCardSx } from "../../lib/uiSurfaces";
+import { MODULE_BY_KEY, type InferenceModuleKey } from "../../lib/inferenceModules";
 
 // ---------------------------------------------------------------------------
 // Palette
@@ -80,9 +82,19 @@ function fmtBytes(n?: number | string | null) {
 }
 
 /** Hero/stat tile. A single headline number is a tile, never a one-bar chart. */
-function StatTile({ label, value, hint, accent }: { label: string; value: string | number; hint?: string; accent?: string }) {
+function StatTile({ label, value, hint, accent, onClick }: {
+  label: string; value: string | number; hint?: string; accent?: string; onClick?: () => void;
+}) {
   return (
-    <Paper sx={{ ...contentCardSx, p: 1.75, height: "100%" }}>
+    <Paper
+      onClick={onClick}
+      sx={{
+        ...contentCardSx, p: 1.75, height: "100%",
+        cursor: onClick ? "pointer" : "default",
+        transition: "box-shadow 160ms ease",
+        ...(onClick ? { "&:hover": { boxShadow: "0 2px 10px rgba(15,23,42,.10)" } } : {}),
+      }}
+    >
       <Stack direction="row" spacing={1} sx={{ alignItems: "center", mb: 0.5 }}>
         {accent && <Box sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: accent, flexShrink: 0 }} />}
         <Typography variant="caption" color="text.secondary" noWrap>{label}</Typography>
@@ -110,6 +122,7 @@ function ChartCard({ title, subtitle, height = 190, children }: {
 }
 
 export function InferenceAnalyticsView() {
+  const navigate = useNavigate();
   const { data: stats, isLoading: lStats } = useQuery({
     queryKey: ["inference", "stats", 14],
     queryFn: async () => (await api.get("/inference/stats", { params: { days: 14 } })).data as Stats,
@@ -185,6 +198,8 @@ export function InferenceAnalyticsView() {
               value={Number(c[s] || 0)}
               accent={SERVICE_COLOUR[s]}
               hint={`${Number(last24.get(s)?.n || 0)} in last 24h`}
+              // Each KPI drills into its own Monitoring module, per the brief.
+              onClick={() => navigate(MODULE_BY_KEY[s as InferenceModuleKey].route)}
             />
           </Grid>
         ))}
