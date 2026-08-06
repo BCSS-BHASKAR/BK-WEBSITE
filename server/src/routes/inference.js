@@ -12,6 +12,8 @@ const express = require("express");
 const { pool } = require("../db");
 const { presignGet, probe } = require("../lib/inferenceS3");
 const { runIngest } = require("../lib/inferenceIngest");
+const { posterFile, hasPoster, posterUrl, verifyPosterUrl } = require("../lib/inferencePosters");
+const fs = require("fs");
 
 const router = express.Router();
 
@@ -58,6 +60,10 @@ async function withMedia(rows) {
       const out = { ...r };
       if (r.s3_key) {
         out.mediaUrl = await presignGet(r.s3_key, { downloadName: r.s3_key.split("/").pop() });
+        out.isVideo = String(r.content_type || "").startsWith("video");
+        // A video with no poster renders as a black box, so hand the UI a
+        // cached frame instead. Signed separately - <img> cannot send headers.
+        if (out.isVideo && hasPoster(r.id)) out.posterUrl = posterUrl(r.id);
       }
       delete out.s3_key;
       if (r.face_s3_key) {
@@ -338,6 +344,91 @@ router.get("/media/:assetId", async (req, res) => {
   }
 });
 
+/**
+ * Cached video poster frame. Authenticated by a short-lived HMAC in the query
+ * string rather than a bearer token, because <img src> cannot set headers.
+ * Exported as its OWN router and mounted ahead of the authenticated one in
+ * index.js, so requireAuth never sees it.
+ */
+const posterRouter = express.Router();
+posterRouter.get("/:assetId", (req, res) => {
+  const id = Number(req.params.assetId);
+  if (!Number.isFinite(id)) return res.status(400).end();
+  if (!verifyPosterUrl(id, req.query.e, req.query.s)) return res.status(403).end();
+  const file = posterFile(id);
+  if (!hasPoster(id)) return res.status(404).end();
+  res.set("Content-Type", "image/jpeg");
+  res.set("Cache-Control", "private, max-age=3600");
+  fs.createReadStream(file).pipe(res);
+});
+
+/**
+ * Every media object, including the ~390 walk-in crops and face crops that
+ * have no JSONL metadata and therefore appear in no service table. Without
+ * this, most of what the cameras captured would be invisible in the UI.
+ */
+router.get("/media", async (req, res) => {
+  try {
+    const { page, pageSize, offset } = paginate(req);
+    const f = buildFilters(req, "m.captured_at", "m.camera_key");
+    const where = f.sql ? [f.sql.replace(/^WHERE /, "")] : [];
+    const params = [...f.params];
+
+    const service = String(req.query.service || "").trim();
+    if (service) { where.push("m.service = ?"); params.push(service); }
+    const artefact = String(req.query.artefact || "").trim();
+    if (artefact) { where.push("m.artefact_type = ?"); params.push(artefact); }
+    const kind = String(req.query.kind || "").trim();
+    if (kind === "image") where.push("m.content_type LIKE 'image/%'");
+    if (kind === "video") where.push("m.content_type LIKE 'video/%'");
+    if (String(req.query.orphans || "") === "1") {
+      // Crops with no detection row - the metadata gap made visible.
+      where.push(`NOT EXISTS (SELECT 1 FROM walkin_detection d
+                               WHERE d.crop_asset_id = m.id OR d.face_asset_id = m.id)`);
+      where.push("m.service = 'walkins'");
+    }
+    const sql = where.length ? `WHERE ${where.join(" AND ")}` : "";
+    await listEndpoint(res, {
+      countSql: `SELECT COUNT(*) AS total FROM media_asset m ${sql}`,
+      rowsSql: `SELECT m.id, m.camera_key, m.service, m.artefact_type, m.content_type,
+                       m.size_bytes, m.captured_at, m.folder_date, m.s3_key
+                  FROM media_asset m ${sql}
+                 ORDER BY m.captured_at DESC NULLS LAST, m.id DESC
+                 LIMIT ? OFFSET ?`,
+      params, page, pageSize, offset,
+    });
+  } catch (e) {
+    console.error("inference media list", e);
+    res.status(500).json({ error: "server_error" });
+  }
+});
+
+/** Activity buckets for the dashboard charts. */
+router.get("/stats", async (req, res) => {
+  try {
+    const days = Math.min(90, Math.max(1, Number(req.query.days) || 14));
+    const [byDay] = await pool.query(
+      `SELECT (occurred_at AT TIME ZONE 'Asia/Kolkata')::date AS day, service, COUNT(*) AS n
+         FROM inference_timeline
+        WHERE occurred_at > now() - ($1::int * interval '1 day')
+        GROUP BY 1, 2 ORDER BY 1`.replace("$1", "?"),
+      [days]
+    );
+    const [byHour] = await pool.query(
+      `SELECT EXTRACT(HOUR FROM occurred_at AT TIME ZONE 'Asia/Kolkata')::int AS hour, COUNT(*) AS n
+         FROM inference_timeline GROUP BY 1 ORDER BY 1`
+    );
+    const [byCamera] = await pool.query(
+      `SELECT service, camera_key, COUNT(*) AS n, MAX(occurred_at) AS latest
+         FROM inference_timeline GROUP BY 1, 2 ORDER BY n DESC`
+    );
+    res.json({ byDay, byHour, byCamera });
+  } catch (e) {
+    console.error("inference stats", e);
+    res.status(500).json({ error: "server_error" });
+  }
+});
+
 /** Manual ingest trigger (the scheduler also runs on an interval). */
 router.post("/ingest", async (_req, res) => {
   try {
@@ -348,4 +439,4 @@ router.post("/ingest", async (_req, res) => {
   }
 });
 
-module.exports = { inferenceRouter: router };
+module.exports = { inferenceRouter: router, inferencePosterRouter: posterRouter };

@@ -26,7 +26,6 @@ import PeopleOutlinedIcon from "@mui/icons-material/PeopleOutlined";
 import DirectionsWalkOutlinedIcon from "@mui/icons-material/DirectionsWalkOutlined";
 import DirectionsCarOutlinedIcon from "@mui/icons-material/DirectionsCarOutlined";
 import RouteOutlinedIcon from "@mui/icons-material/RouteOutlined";
-import ManageAccountsOutlinedIcon from "@mui/icons-material/ManageAccountsOutlined";
 
 import MenuIcon from "@mui/icons-material/Menu";
 import { Outlet, useLocation, useNavigate, Link } from "react-router-dom";
@@ -91,8 +90,6 @@ const nav: {
 
   { label: "Offenders", path: null, icon: <PeopleOutlinedIcon />, vehicleModule: true },
   { label: "Vehicles", path: null, icon: <DirectionsCarOutlinedIcon />, vehicleModule: true },
-  { label: "Guests", path: null, icon: <PeopleOutlinedIcon /> },
-  { label: "Users & Access", path: null, icon: <ManageAccountsOutlinedIcon /> },
 
 ];
 

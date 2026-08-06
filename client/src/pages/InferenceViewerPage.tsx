@@ -21,6 +21,8 @@ import {
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import PhotoCameraOutlinedIcon from "@mui/icons-material/PhotoCameraOutlined";
+import PhotoLibraryOutlinedIcon from "@mui/icons-material/PhotoLibraryOutlined";
+import PlayCircleFilledRoundedIcon from "@mui/icons-material/PlayCircleFilledRounded";
 import DirectionsWalkOutlinedIcon from "@mui/icons-material/DirectionsWalkOutlined";
 import NightsStayOutlinedIcon from "@mui/icons-material/NightsStayOutlined";
 import TimerOutlinedIcon from "@mui/icons-material/TimerOutlined";
@@ -60,6 +62,9 @@ type AnyRow = BaseRow & {
   mode?: string | null;
   colours?: Colour[];
   faceUrl?: string;
+  posterUrl?: string;
+  isVideo?: boolean;
+  artefact_type?: string;
 };
 
 type ListResponse<T> = { total: number; page: number; pageSize: number; rows: T[] };
@@ -70,6 +75,7 @@ const SERVICES = [
   { key: "loitering", label: "Loitering", icon: <TimerOutlinedIcon fontSize="small" /> },
   { key: "intrusion", label: "Intrusion", icon: <ReportGmailerrorredOutlinedIcon fontSize="small" /> },
   { key: "after-hours", label: "After Hours", icon: <NightsStayOutlinedIcon fontSize="small" /> },
+  { key: "media", label: "All Media", icon: <PhotoLibraryOutlinedIcon fontSize="small" /> },
 ] as const;
 
 const PAGE_SIZE = 48;
@@ -168,7 +174,7 @@ export function InferenceViewerPage() {
 
   const cameraOptions = useMemo(() => {
     const all = cameras?.cameras || [];
-    const svc = tab === "timeline" ? null : tab === "after-hours" ? "after_hours" : tab;
+    const svc = tab === "timeline" || tab === "media" ? null : tab === "after-hours" ? "after_hours" : tab;
     return all.filter((c) => !svc || c.service === svc);
   }, [cameras, tab]);
 
@@ -326,13 +332,33 @@ export function InferenceViewerPage() {
                          sx={{ width: "100%", height: "100%", objectFit: "contain" }} />
                   )}
                   {r.mediaUrl && isVideo && (
-                    <Stack spacing={0.5} sx={{ alignItems: "center", color: "rgba(255,255,255,.75)" }}>
-                      <TimerOutlinedIcon sx={{ fontSize: 34 }} />
-                      <Typography variant="caption">
-                        {fmtDwell(r.dwell_seconds)} clip · {fmtBytes(r.size_bytes)}
-                      </Typography>
-                      <Typography variant="caption" sx={{ opacity: 0.7 }}>click to play</Typography>
-                    </Stack>
+                    <>
+                      {/* Poster frame extracted from the clip; without it a
+                          video tile is just a black rectangle. */}
+                      {r.posterUrl ? (
+                        <Box component="img" src={r.posterUrl} alt={caption} loading="lazy"
+                             sx={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                      ) : (
+                        <Stack spacing={0.5} sx={{ alignItems: "center", color: "rgba(255,255,255,.6)" }}>
+                          <TimerOutlinedIcon sx={{ fontSize: 30 }} />
+                          <Typography variant="caption">poster pending</Typography>
+                        </Stack>
+                      )}
+                      <PlayCircleFilledRoundedIcon
+                        sx={{
+                          position: "absolute", fontSize: 54, color: "rgba(255,255,255,.92)",
+                          filter: "drop-shadow(0 2px 6px rgba(0,0,0,.6))", pointerEvents: "none",
+                        }}
+                      />
+                      <Chip
+                        size="small"
+                        label={`${fmtDwell(r.dwell_seconds)} · ${fmtBytes(r.size_bytes)}`}
+                        sx={{
+                          position: "absolute", bottom: 8, right: 8, height: 22, fontSize: 11,
+                          bgcolor: "rgba(0,0,0,.7)", color: "#fff",
+                        }}
+                      />
+                    </>
                   )}
                   {!r.mediaUrl && (
                     <Typography variant="caption" sx={{ color: "rgba(255,255,255,.5)" }}>no media</Typography>
@@ -372,6 +398,13 @@ export function InferenceViewerPage() {
                     <Stack direction="row" spacing={0.5} sx={{ mt: 0.75, flexWrap: "wrap", gap: 0.5 }}>
                       <Chip size="small" color="warning" label={`dwell ${fmtDwell(r.dwell_seconds)}`} sx={{ height: 22, fontSize: 11 }} />
                       {r.global_id && <Chip size="small" variant="outlined" label={`GID ${r.global_id}`} sx={{ height: 22, fontSize: 11 }} />}
+                    </Stack>
+                  )}
+                  {tab === "media" && (
+                    <Stack direction="row" spacing={0.5} sx={{ mt: 0.75, flexWrap: "wrap", gap: 0.5 }}>
+                      <Chip size="small" variant="outlined" label={r.service} sx={{ height: 22, fontSize: 11 }} />
+                      <Chip size="small" variant="outlined" label={r.artefact_type} sx={{ height: 22, fontSize: 11 }} />
+                      {r.size_bytes ? <Chip size="small" label={fmtBytes(r.size_bytes)} sx={{ height: 22, fontSize: 11 }} /> : null}
                     </Stack>
                   )}
                   {tab === "after-hours" && r.tag && (

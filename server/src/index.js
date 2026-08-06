@@ -19,7 +19,7 @@ const { walkingEnrollRouter, walkingEnrollMediaRouter } = require("./routes/walk
 const { chatAuditRouter } = require("./routes/chatAudit");
 const { challanRouter } = require("./routes/challan");
 const { startCameraAlertMonitor } = require("./lib/cameraAlertMonitor");
-const { inferenceRouter } = require("./routes/inference");
+const { inferenceRouter, inferencePosterRouter } = require("./routes/inference");
 const { startIngestScheduler } = require("./lib/inferenceIngest");
 const { runMigrations } = require("./lib/dbMigrations");
 const { pool } = require("./db");
@@ -50,6 +50,10 @@ app.use("/api/assistant-enhance", requireAuth, assistantEnhanceRouter);
 app.use("/api/walking-enroll", requireAuth, walkingEnrollRouter);
 app.use("/api/chat-audit", requireAuth, requireAuditAdmin, chatAuditRouter);
 app.use("/api/challan", requireAuth, challanRouter);
+// Poster frames carry their own short-lived HMAC in the query string because an
+// <img> tag cannot send an Authorization header. Mounted BEFORE the
+// authenticated inference router so requireAuth does not reject it.
+app.use("/api/inference/poster", inferencePosterRouter);
 // Inference viewer (S3 -> Postgres). Authenticated: the media it exposes
 // includes face crops and is treated as biometric data.
 app.use("/api/inference", requireAuth, inferenceRouter);

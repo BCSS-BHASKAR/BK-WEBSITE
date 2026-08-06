@@ -26,6 +26,7 @@ const {
   parseWalkinRecord,
 } = require("./inferenceParsers");
 const { listObjects, getObjectText, PREFIX } = require("./inferenceS3");
+const { generatePoster, hasPoster } = require("./inferencePosters");
 
 const SIDECAR_RE = /\.jsonl$/i;
 
@@ -93,6 +94,7 @@ async function noteCamera(pool, service, cameraKey) {
  */
 async function ingestMedia(pool, { since = null } = {}) {
   const sidecars = [];
+  const videoAssets = [];
   const cropIndex = new Map(); // basename -> asset id
   const snapshotIndex = new Map();
   let seen = 0;
@@ -140,6 +142,9 @@ async function ingestMedia(pool, { since = null } = {}) {
     assets++;
     await noteCamera(pool, k.service, cameraKey);
 
+    // Videos need a poster frame or the UI shows a black rectangle.
+    if (contentTypeFor(k.filename).startsWith("video")) videoAssets.push({ assetId, key: o.Key });
+
     const base = k.filename.split("/").pop();
     if (k.service === "walkins") cropIndex.set(base, assetId);
     if (t === "intrusion/snapshots") snapshotIndex.set(base, assetId);
@@ -170,7 +175,7 @@ async function ingestMedia(pool, { since = null } = {}) {
     }
   }
 
-  return { seen, assets, sidecars, cropIndex, snapshotIndex };
+  return { seen, assets, sidecars, cropIndex, snapshotIndex, videoAssets };
 }
 
 /** Pass 2a - intrusion sidecars. Upsert on (camera_key, occurred_at). */
@@ -297,7 +302,21 @@ async function runIngest(pool, { since = null } = {}) {
     }
   }
 
+  // Poster frames, bounded per pass: each costs a few MB of range-fetch, so a
+  // cold start spreads the work over consecutive runs rather than blocking.
+  const pending = media.videoAssets.filter((v) => !hasPoster(v.assetId));
+  const budget = Number(process.env.INFERENCE_POSTER_PER_PASS || 40);
+  let postersMade = 0;
+  for (const v of pending.slice(0, budget)) {
+    if (await generatePoster(v.assetId, v.key)) postersMade++;
+  }
+  if (pending.length) {
+    log(`posters: ${postersMade} generated, ${Math.max(0, pending.length - budget)} still pending`);
+  }
+
   const summary = {
+    postersMade,
+    postersPending: Math.max(0, pending.length - budget),
     objectsSeen: media.seen,
     assetsUpserted: media.assets,
     sidecarFiles: media.sidecars.length,

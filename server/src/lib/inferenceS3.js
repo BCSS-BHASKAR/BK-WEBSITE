@@ -64,6 +64,22 @@ async function getObjectText(key) {
 }
 
 /**
+ * Fetch only the first `bytes` of an object.
+ *
+ * Used for video poster extraction: a loitering clip is 30-40 MB, but the
+ * opening few MB of a WebM contain enough to decode frame 0. Pulling the whole
+ * clip cross-region just to make a thumbnail would move gigabytes for nothing.
+ */
+async function getObjectHead(key, bytes = 3 * 1024 * 1024) {
+  const res = await s3().send(
+    new GetObjectCommand({ Bucket: BUCKET, Key: key, Range: `bytes=0-${bytes - 1}` })
+  );
+  const chunks = [];
+  for await (const chunk of res.Body) chunks.push(chunk);
+  return Buffer.concat(chunks);
+}
+
+/**
  * Mint a short-TTL presigned GET URL. The browser fetches straight from S3,
  * which keeps 30-40 MB loitering clips off the EC2 box entirely and gives
  * native HTTP range requests for video seeking.
@@ -88,4 +104,4 @@ async function probe() {
   return { bucket: BUCKET, region: REGION, prefix: PREFIX, reachable: true, keyCount: res.KeyCount || 0 };
 }
 
-module.exports = { BUCKET, REGION, PREFIX, listObjects, getObjectText, presignGet, probe };
+module.exports = { BUCKET, REGION, PREFIX, listObjects, getObjectText, getObjectHead, presignGet, probe };
