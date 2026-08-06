@@ -204,7 +204,7 @@ export function InferenceAnalyticsView() {
           <Grid key={s.service} size={{ xs: 12, sm: 6, md: 3 }}>
             <ChartCard title={SERVICE_LABEL[s.service]} subtitle={`${s.total} events`} height={140}>
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={s.points} margin={{ top: 4, right: 6, left: -22, bottom: 0 }}>
+                <AreaChart data={s.points} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
                   <defs>
                     <linearGradient id={`g-${s.service}`} x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor={SERVICE_COLOUR[s.service]} stopOpacity={0.35} />
@@ -214,8 +214,8 @@ export function InferenceAnalyticsView() {
                   <CartesianGrid stroke={GRID} vertical={false} />
                   <XAxis dataKey="day" tickFormatter={fmtDay} tick={{ fontSize: 10, fill: INK_MUTED }}
                          axisLine={false} tickLine={false} minTickGap={18} />
-                  <YAxis allowDecimals={false} width={34} tick={{ fontSize: 10, fill: INK_MUTED }}
-                         axisLine={false} tickLine={false} />
+                  <YAxis allowDecimals={false} width={30} tick={{ fontSize: 10, fill: INK_MUTED }}
+                         axisLine={false} tickLine={false} tickMargin={4} />
                   <RTooltip
                     labelFormatter={(v) => fmtDay(String(v))}
                     formatter={(v) => [Number(v ?? 0), SERVICE_LABEL[s.service]] as [number, string]}
@@ -236,12 +236,12 @@ export function InferenceAnalyticsView() {
         <Grid size={{ xs: 12, md: 7 }}>
           <ChartCard title="When events happen" subtitle="All services by hour of day (site time, IST)" height={210}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={hourly} margin={{ top: 4, right: 8, left: -22, bottom: 0 }}>
+              <BarChart data={hourly} margin={{ top: 4, right: 12, left: 0, bottom: 0 }}>
                 <CartesianGrid stroke={GRID} vertical={false} />
                 <XAxis dataKey="hour" tick={{ fontSize: 10, fill: INK_MUTED }} axisLine={false} tickLine={false}
                        tickFormatter={(h) => `${String(h).padStart(2, "0")}`} interval={1} />
-                <YAxis allowDecimals={false} width={34} tick={{ fontSize: 10, fill: INK_MUTED }}
-                       axisLine={false} tickLine={false} />
+                <YAxis allowDecimals={false} width={32} tick={{ fontSize: 10, fill: INK_MUTED }}
+                       axisLine={false} tickLine={false} tickMargin={4} />
                 <RTooltip
                   labelFormatter={(h) => `${String(h).padStart(2, "0")}:00 – ${String(Number(h) + 1).padStart(2, "0")}:00`}
                   formatter={(v) => [Number(v ?? 0), "events"] as [number, string]}
