@@ -15,6 +15,7 @@ import {
   useMediaQuery,
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
+import AutoAwesomeOutlinedIcon from "@mui/icons-material/AutoAwesomeOutlined";
 import DashboardIcon from "@mui/icons-material/Dashboard";
 import ListAltIcon from "@mui/icons-material/ListAlt";
 import PolicyIcon from "@mui/icons-material/Policy";
@@ -75,6 +76,7 @@ const nav: {
   child?: boolean;
 }[] = [
   { label: SITE_LABELS.operationalDashboardsNavShort, path: "/dashboard", icon: <DashboardIcon /> },
+  { label: "AI Daily Briefing", path: "/daily-briefing", icon: <AutoAwesomeOutlinedIcon /> },
 
   // One Monitoring page template serves all five inference types; each entry
   // differs only by its route slug. See lib/inferenceModules.ts.
@@ -86,8 +88,8 @@ const nav: {
 
   { label: "Active Alerts", path: "/crowds-report", icon: <WarningAmberRoundedIcon /> },
   { label: SITE_LABELS.liveView, path: "/live-view", icon: <VideocamRoundedIcon /> },
-  { label: "Known Faces", path: "/known-faces", icon: <FaceRetouchingNaturalOutlinedIcon />, hiddenFromMenu: true },
   { label: "Inference Viewer", path: "/inference", icon: <CameraOutdoorOutlinedIcon />, hiddenFromMenu: true },
+  { label: "Known Faces", path: "/known-faces", icon: <FaceRetouchingNaturalOutlinedIcon /> },
   { label: "Settings", path: "/settings", icon: <SettingsOutlinedIcon /> },
 
   // Parked until the Python assistant services are deployed — drop
@@ -132,6 +134,7 @@ function navItemSx(selected: boolean, sidebarExpanded: boolean) {
 }
 
 const navPageTitle: Record<string, string> = {
+  "/daily-briefing": "AI Daily Briefing",
   "/dashboard": SITE_LABELS.operationalDashboards,
   "/violations": SITE_LABELS.trafficViolations,
   "/vehicle-report": SITE_LABELS.anprRecords,
@@ -147,6 +150,7 @@ const navPageTitle: Record<string, string> = {
 };
 
 const navPageSubtitle: Record<string, string> = {
+  "/daily-briefing": "Executive brief \u2014 narrative insights and recommendations for venue management.",
   "/dashboard": SITE_LABELS.operationalDashboardsSubtitle,
   "/violations": SITE_LABELS.violationEventGrid,
   "/vehicle-report": SITE_LABELS.anprRecordsPageSubtitle,

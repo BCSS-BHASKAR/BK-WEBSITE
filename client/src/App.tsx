@@ -4,7 +4,7 @@ import { AppShell } from "./components/AppShell";
 import { ProtectedLayout } from "./components/ProtectedLayout";
 import { DashboardPage } from "./pages/DashboardPage";
 import { VehicleReportPage } from "./pages/VehicleReportPage";
-import { CrowdsReportPage } from "./pages/CrowdsReportPage";
+import { ActiveAlertsPage } from "./pages/ActiveAlertsPage";
 import { ViolationsPage } from "./pages/ViolationsPage";
 import { LiveViewPage } from "./pages/LiveViewPage";
 import { LoginPage } from "./pages/LoginPage";
@@ -16,6 +16,7 @@ import { ChallanEmailPage } from "./pages/ChallanEmailPage";
 import { ChallanHistoryPage } from "./pages/ChallanHistoryPage";
 import { VehicleJourneyPage } from "./pages/VehicleJourneyPage";
 import { KnownFacesPage } from "./pages/KnownFacesPage";
+import { DailyBriefingPage } from "./pages/DailyBriefingPage";
 import { InferenceViewerPage } from "./pages/InferenceViewerPage";
 import { MonitoringPage } from "./pages/MonitoringPage";
 import { SettingsPage } from "./pages/SettingsPage";
@@ -29,7 +30,10 @@ export default function App() {
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/vehicle-report" element={<VehicleReportPage />} />
-          <Route path="/crowds-report" element={<CrowdsReportPage />} />
+          {/* Active Alerts now reads the live inference data. The previous
+              page queried the legacy crowds table, which has no writer. */}
+          <Route path="/crowds-report" element={<ActiveAlertsPage />} />
+          <Route path="/active-alerts" element={<Navigate to="/crowds-report" replace />} />
           <Route path="/vehicle-journey" element={<VehicleJourneyPage />} />
           <Route path="/violations" element={<ViolationsPage />} />
           <Route path="/violation" element={<ViolationsPage />} />
@@ -42,6 +46,7 @@ export default function App() {
           <Route path="/monitoring/:module" element={<MonitoringPage />} />
           <Route path="/monitoring" element={<Navigate to="/monitoring/walkins" replace />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/daily-briefing" element={<DailyBriefingPage />} />
           {/* Legacy report routes now point at their Monitoring equivalents.
               Kept as redirects so existing links and bookmarks keep working. */}
           <Route path="/walkins-report" element={<Navigate to="/monitoring/walkins" replace />} />
