@@ -16,6 +16,7 @@ import {
 } from "../components/monitoring/MonitoringFilters";
 import { getAccessToken } from "../auth/tokenStore";
 import { useAutoRefreshMs } from "../lib/useAppSettings";
+import { RequirePage, type PageKey } from "../lib/permissions";
 
 const PAGE_SIZE = 25;
 
@@ -156,8 +157,14 @@ export function MonitoringPage() {
 
   const rows = rowsQ.data?.rows || [];
   const total = rowsQ.data?.total || 0;
+  // The permission key depends on the route slug, so the guard lives here
+  // rather than on a static <Route>.
+  const pageKey = (
+    mod.key === "kitchen_unattended" ? "monitoring_kitchen" : `monitoring_${mod.key}`
+  ) as PageKey;
 
   return (
+    <RequirePage page={pageKey} label={`${mod.label} Monitoring`}>
     <Box sx={pageLayoutSx}>
       <Box>
         <Typography variant="h5" sx={{ fontWeight: 800 }}>{mod.label} Monitoring</Typography>
@@ -223,5 +230,6 @@ export function MonitoringPage() {
         anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
       />
     </Box>
+    </RequirePage>
   );
 }

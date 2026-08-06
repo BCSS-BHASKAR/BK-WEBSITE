@@ -49,6 +49,8 @@ import TimerOutlinedIcon from "@mui/icons-material/TimerOutlined";
 import ReportGmailerrorredOutlinedIcon from "@mui/icons-material/ReportGmailerrorredOutlined";
 import NightsStayOutlinedIcon from "@mui/icons-material/NightsStayOutlined";
 import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
+import AdminPanelSettingsOutlinedIcon from "@mui/icons-material/AdminPanelSettingsOutlined";
+import { usePermissions } from "../lib/permissions";
 
 const SHOW_SIDEBAR_STATUS_AND_PROFILE = false;
 
@@ -65,6 +67,8 @@ const MASTHEAD_HEIGHT = { xs: 72, sm: 76 };
 const nav: {
   label: string;
   path: string | null;
+  /** RBAC key; entries without one are always shown. */
+  page?: string;
   icon: ReactNode;
   openInNewTab?: boolean;
   vehicleModule?: boolean;
@@ -75,22 +79,23 @@ const nav: {
   /** Indented as a child of the section above it. */
   child?: boolean;
 }[] = [
-  { label: SITE_LABELS.operationalDashboardsNavShort, path: "/dashboard", icon: <DashboardIcon /> },
-  { label: "AI Daily Briefing", path: "/daily-briefing", icon: <AutoAwesomeOutlinedIcon /> },
+  { label: SITE_LABELS.operationalDashboardsNavShort, path: "/dashboard", icon: <DashboardIcon />, page: "dashboard" },
+  { label: "AI Daily Briefing", path: "/daily-briefing", icon: <AutoAwesomeOutlinedIcon />, page: "daily_briefing" },
 
   // One Monitoring page template serves all five inference types; each entry
   // differs only by its route slug. See lib/inferenceModules.ts.
-  { label: "Walk-ins", path: "/monitoring/walkins", icon: <DirectionsWalkOutlinedIcon />, sectionLabel: "Monitoring", child: true },
-  { label: "Loitering", path: "/monitoring/loitering", icon: <TimerOutlinedIcon />, child: true },
-  { label: "Intrusion", path: "/monitoring/intrusion", icon: <ReportGmailerrorredOutlinedIcon />, child: true },
-  { label: "After Hours", path: "/monitoring/after-hours", icon: <NightsStayOutlinedIcon />, child: true },
-  { label: "Kitchen Unattended", path: "/monitoring/kitchen-unattended", icon: <SoupKitchenOutlinedIcon />, child: true },
+  { label: "Walk-ins", path: "/monitoring/walkins", icon: <DirectionsWalkOutlinedIcon />, sectionLabel: "Monitoring", child: true, page: "monitoring_walkins" },
+  { label: "Loitering", path: "/monitoring/loitering", icon: <TimerOutlinedIcon />, child: true, page: "monitoring_loitering" },
+  { label: "Intrusion", path: "/monitoring/intrusion", icon: <ReportGmailerrorredOutlinedIcon />, child: true, page: "monitoring_intrusion" },
+  { label: "After Hours", path: "/monitoring/after-hours", icon: <NightsStayOutlinedIcon />, child: true, page: "monitoring_after_hours" },
+  { label: "Kitchen Unattended", path: "/monitoring/kitchen-unattended", icon: <SoupKitchenOutlinedIcon />, child: true, page: "monitoring_kitchen" },
 
-  { label: "Active Alerts", path: "/crowds-report", icon: <WarningAmberRoundedIcon /> },
-  { label: SITE_LABELS.liveView, path: "/live-view", icon: <VideocamRoundedIcon /> },
+  { label: "Active Alerts", path: "/crowds-report", icon: <WarningAmberRoundedIcon />, page: "active_alerts" },
+  { label: SITE_LABELS.liveView, path: "/live-view", icon: <VideocamRoundedIcon />, page: "cameras_online" },
   { label: "Inference Viewer", path: "/inference", icon: <CameraOutdoorOutlinedIcon />, hiddenFromMenu: true },
-  { label: "Known Faces", path: "/known-faces", icon: <FaceRetouchingNaturalOutlinedIcon /> },
-  { label: "Settings", path: "/settings", icon: <SettingsOutlinedIcon /> },
+  { label: "Known Faces", path: "/known-faces", icon: <FaceRetouchingNaturalOutlinedIcon />, page: "known_faces" },
+  { label: "Settings", path: "/settings", icon: <SettingsOutlinedIcon />, page: "settings" },
+  { label: "Roles & Access", path: "/settings/access", icon: <AdminPanelSettingsOutlinedIcon />, page: "access_control" },
 
   // Parked until the Python assistant services are deployed — drop
   // hiddenFromMenu to put it back in the sidebar.
@@ -105,7 +110,7 @@ const nav: {
 
 ];
 
-const visibleNav = nav.filter((n) => !n.hiddenFromMenu && !(HIDE_VEHICLE_MODULES && n.vehicleModule));
+const baseNav = nav.filter((n) => !n.hiddenFromMenu && !(HIDE_VEHICLE_MODULES && n.vehicleModule));
 
 function readCollapsedPreference(): boolean {
   try {
@@ -165,6 +170,15 @@ const navPageSubtitle: Record<string, string> = {
 };
 
 function AppShellInner() {
+  // Hide nav entries this role cannot open. Entries without a `page` key (none
+  // today) stay visible. The API enforces the same grants independently, so
+  // this is presentation, not the security boundary.
+  const { can, isLoading: permsLoading } = usePermissions();
+  const visibleNav = useMemo(
+    () => baseNav.filter((n) => !n.page || permsLoading || can(n.page as never)),
+    [can, permsLoading]
+  );
+
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
   const loc = useLocation();

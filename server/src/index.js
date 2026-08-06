@@ -21,6 +21,8 @@ const { challanRouter } = require("./routes/challan");
 const { startCameraAlertMonitor } = require("./lib/cameraAlertMonitor");
 const { inferenceRouter, inferencePosterRouter } = require("./routes/inference");
 const { settingsRouter } = require("./routes/settings");
+const { rbacRouter, ensureRbacSeed } = require("./routes/rbac");
+const { requirePageAccess } = require("./middleware/requirePageAccess");
 const { startIngestScheduler } = require("./lib/inferenceIngest");
 const { runMigrations } = require("./lib/dbMigrations");
 const { pool } = require("./db");
@@ -44,11 +46,11 @@ app.use("/api/walking-enroll/media", walkingEnrollMediaRouter);
 
 app.use("/api/auth", authRouter);
 app.use("/api/dashboard", requireAuthOrInternal, dashboardRouter);
-app.use("/api/streams", requireAuth, streamsRouter);
+app.use("/api/streams", requireAuth, requirePageAccess, streamsRouter);
 app.use("/api/watchlist", requireAuth, watchlistRouter);
 app.use("/api/chat", requireAuth, chatRouter);
 app.use("/api/assistant-enhance", requireAuth, assistantEnhanceRouter);
-app.use("/api/walking-enroll", requireAuth, walkingEnrollRouter);
+app.use("/api/walking-enroll", requireAuth, requirePageAccess, walkingEnrollRouter);
 app.use("/api/chat-audit", requireAuth, requireAuditAdmin, chatAuditRouter);
 app.use("/api/challan", requireAuth, challanRouter);
 // Poster frames carry their own short-lived HMAC in the query string because an
@@ -57,10 +59,14 @@ app.use("/api/challan", requireAuth, challanRouter);
 app.use("/api/inference/poster", inferencePosterRouter);
 // Inference viewer (S3 -> Postgres). Authenticated: the media it exposes
 // includes face crops and is treated as biometric data.
-app.use("/api/inference", requireAuth, inferenceRouter);
+app.use("/api/inference", requireAuth, requirePageAccess, inferenceRouter);
 // Administrator settings. Detector scopes are persisted here and delivered to
 // the on-prem inference host by publishing a versioned config.json to S3.
-app.use("/api/settings", requireAuth, settingsRouter);
+app.use("/api/settings", requireAuth, requirePageAccess, settingsRouter);
+// Access control. Mounted once: /rbac/me and /rbac/pages are readable by any
+// authenticated user (a client cannot render its own nav otherwise), and the
+// administrative routes carry their own access_control guard inside the router.
+app.use("/api/rbac", requireAuth, rbacRouter);
 
 app.use("/api/challan-public", challanRouter);
 
@@ -70,5 +76,6 @@ app.listen(port, "0.0.0.0", () => {
   runMigrations(pool).then(() => {
     startCameraAlertMonitor(pool);
     startIngestScheduler(pool);
+    ensureRbacSeed();
   });
 });
