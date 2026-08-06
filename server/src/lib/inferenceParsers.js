@@ -42,6 +42,13 @@ function basename(p) {
  * Split an S3 key of the shape uploads/<service>/<artefact>/<YYYY-MM-DD>/<file>.
  * Returns null for anything that does not match (e.g. uploads/_healthcheck/...).
  */
+// Services the ingester understands. kitchen_unattended is listed ahead of the
+// on-prem service existing: the moment it starts writing
+// uploads/kitchen_unattended/..., ingest picks it up with no code change.
+const KNOWN_SERVICES = new Set([
+  "walkins", "loitering", "intrusion", "after_hours", "kitchen_unattended",
+]);
+
 function parseKey(key) {
   const parts = String(key || "").split("/");
   if (parts.length < 5 || parts[0] !== "uploads") return null;
@@ -249,6 +256,7 @@ function parseWalkinRecord(line) {
 
 module.exports = {
   SITE_TZ,
+  KNOWN_SERVICES,
   basename,
   parseKey,
   contentTypeFor,
