@@ -19,6 +19,7 @@ import { ChallanHistoryPage } from "./pages/ChallanHistoryPage";
 import { DailyBriefingPage } from "./pages/DailyBriefingPage";
 import { VehicleJourneyPage } from "./pages/VehicleJourneyPage";
 import { KnownFacesPage } from "./pages/KnownFacesPage";
+import { InferenceViewerPage } from "./pages/InferenceViewerPage";
 
 export default function App() {
   return (
@@ -40,6 +41,7 @@ export default function App() {
           <Route path="/watchlists" element={<ChefPresencePage />} />
           <Route path="/watchlists/rules" element={<WatchlistsPage />} />
           <Route path="/known-faces" element={<KnownFacesPage />} />
+          <Route path="/inference" element={<InferenceViewerPage />} />
           <Route path="/assistant" element={<AssistantEnhancePage />} />
           <Route path="/assistant_legacy" element={<ChatAssistantPage />} />
           <Route path="/assistant_enhance/debug" element={<AssistantEnhanceDebugPage />} />

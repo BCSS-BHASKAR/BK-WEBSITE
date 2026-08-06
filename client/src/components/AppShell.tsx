@@ -45,6 +45,7 @@ import ReceiptLongOutlinedIcon from "@mui/icons-material/ReceiptLongOutlined";
 import AutoAwesomeOutlinedIcon from "@mui/icons-material/AutoAwesomeOutlined";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import FaceRetouchingNaturalOutlinedIcon from "@mui/icons-material/FaceRetouchingNaturalOutlined";
+import CameraOutdoorOutlinedIcon from "@mui/icons-material/CameraOutdoorOutlined";
 
 const SHOW_SIDEBAR_STATUS_AND_PROFILE = false;
 
@@ -78,6 +79,7 @@ const nav: {
   { label: SITE_LABELS.liveView, path: "/live-view", icon: <VideocamRoundedIcon /> },
 
   { label: "Known Faces", path: "/known-faces", icon: <FaceRetouchingNaturalOutlinedIcon /> },
+  { label: "Inference Viewer", path: "/inference", icon: <CameraOutdoorOutlinedIcon /> },
 
   // Parked until the Python assistant services are deployed — drop
   // hiddenFromMenu to put it back in the sidebar.

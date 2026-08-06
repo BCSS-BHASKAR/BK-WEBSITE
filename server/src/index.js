@@ -19,6 +19,8 @@ const { walkingEnrollRouter, walkingEnrollMediaRouter } = require("./routes/walk
 const { chatAuditRouter } = require("./routes/chatAudit");
 const { challanRouter } = require("./routes/challan");
 const { startCameraAlertMonitor } = require("./lib/cameraAlertMonitor");
+const { inferenceRouter } = require("./routes/inference");
+const { startIngestScheduler } = require("./lib/inferenceIngest");
 const { runMigrations } = require("./lib/dbMigrations");
 const { pool } = require("./db");
 const { inferenceMediaRouter } = require("./routes/inferenceMedia");
@@ -48,11 +50,17 @@ app.use("/api/assistant-enhance", requireAuth, assistantEnhanceRouter);
 app.use("/api/walking-enroll", requireAuth, walkingEnrollRouter);
 app.use("/api/chat-audit", requireAuth, requireAuditAdmin, chatAuditRouter);
 app.use("/api/challan", requireAuth, challanRouter);
+// Inference viewer (S3 -> Postgres). Authenticated: the media it exposes
+// includes face crops and is treated as biometric data.
+app.use("/api/inference", requireAuth, inferenceRouter);
 
 app.use("/api/challan-public", challanRouter);
 
 const port = Number(process.env.PORT || 4000);
 app.listen(port, "0.0.0.0", () => {
   console.log(`API listening on :${port}`);
-  runMigrations(pool).then(() => startCameraAlertMonitor(pool));
+  runMigrations(pool).then(() => {
+    startCameraAlertMonitor(pool);
+    startIngestScheduler(pool);
+  });
 });
