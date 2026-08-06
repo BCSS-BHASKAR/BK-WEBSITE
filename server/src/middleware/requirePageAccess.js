@@ -1,43 +1,54 @@
 "use strict";
 
-// Enforces RBAC on the API.
+// Enforces access control on the API.
 //
 // This is the half that matters. The client hides nav entries and blocks routes
 // for usability, but anyone can type a URL or call the API directly - so the
-// grant is checked here too, against the caller's role, on every request whose
-// path maps to a protected page.
+// grant is checked here too, per user, on every request whose path maps to a
+// protected page.
 //
-// Permissions are cached briefly per role: a settings screen writes them rarely
-// and every page load reads them many times.
+// Model: role 'admin' has every page implicitly; role 'user' has exactly the
+// pages ticked on their account. Absence of a grant is denial.
 
 const { pool } = require("../db");
-const { pageForApiPath } = require("../lib/pages");
+const { pageForApiPath, PAGE_KEYS } = require("../lib/pages");
 
 const CACHE_TTL_MS = 15_000;
-const cache = new Map(); // role -> { pages:Set, expires:number }
+const cache = new Map(); // userId -> { pages:Set, expires:number }
 
-async function pagesForRole(role) {
-  const hit = cache.get(role);
+async function pagesForUser(userId, role) {
+  // Administrators are not stored page-by-page; they hold everything.
+  if (role === "admin") return new Set(PAGE_KEYS);
+
+  const hit = cache.get(userId);
   if (hit && hit.expires > Date.now()) return hit.pages;
+
   const [rows] = await pool.query(
-    `SELECT page_key FROM role_page_permission WHERE role = ?`,
-    [role]
+    `SELECT page_key FROM user_page_permission WHERE user_id = ?`,
+    [userId]
   );
   const pages = new Set(rows.map((r) => r.page_key));
-  cache.set(role, { pages, expires: Date.now() + CACHE_TTL_MS });
+  cache.set(userId, { pages, expires: Date.now() + CACHE_TTL_MS });
   return pages;
 }
 
 /** Drop cached grants so a permission change takes effect immediately. */
-function invalidatePermissionCache(role = null) {
-  if (role) cache.delete(role);
+function invalidatePermissionCache(userId = null) {
+  if (userId) cache.delete(Number(userId));
   else cache.clear();
 }
 
+function identity(req) {
+  // requireAuth sets { id, email, role, ... } - and uses the uppercase "ADMIN"
+  // for the internal service key, so the role is normalised here.
+  const role = String((req.user && req.user.role) || "").trim().toLowerCase();
+  const userId = Number(req.user && req.user.id);
+  return { role, userId };
+}
+
 /**
- * Express middleware. Mounted after requireAuth, so req.user is populated.
- * A path that maps to no page is left alone - this guards pages, not every
- * endpoint in the app.
+ * Express middleware, mounted after requireAuth. A path that maps to no page is
+ * left alone - this guards pages, not every endpoint in the app.
  */
 function requirePageAccess(req, res, next) {
   // req.baseUrl is the mount point (e.g. /api/inference); req.path is the rest.
@@ -45,15 +56,19 @@ function requirePageAccess(req, res, next) {
   const page = pageForApiPath(full);
   if (!page) return next();
 
-  const role = String((req.user && req.user.role) || "").trim();
-  if (!role) return res.status(403).json({ error: "forbidden", message: "No role assigned." });
+  const { role, userId } = identity(req);
+  if (!role || !Number.isFinite(userId)) {
+    return res.status(403).json({ error: "forbidden", message: "No account context." });
+  }
+  // The internal service key (id 0) is a trusted server-to-server caller.
+  if (userId === 0 && role === "admin") return next();
 
-  pagesForRole(role)
+  pagesForUser(userId, role)
     .then((pages) => {
       if (pages.has(page.key)) return next();
       res.status(403).json({
         error: "forbidden",
-        message: `Your role does not have access to ${page.label}.`,
+        message: `Your account does not have access to ${page.label}.`,
         page: page.key,
       });
     })
@@ -64,12 +79,12 @@ function requirePageAccess(req, res, next) {
     });
 }
 
-/** Guard a whole router with one explicit page, e.g. the RBAC admin API. */
+/** Guard a whole router on one explicit page, e.g. the user-administration API. */
 function requirePage(pageKey) {
   return (req, res, next) => {
-    const role = String((req.user && req.user.role) || "").trim();
-    if (!role) return res.status(403).json({ error: "forbidden" });
-    pagesForRole(role)
+    const { role, userId } = identity(req);
+    if (!role || !Number.isFinite(userId)) return res.status(403).json({ error: "forbidden" });
+    pagesForUser(userId, role)
       .then((pages) =>
         pages.has(pageKey)
           ? next()

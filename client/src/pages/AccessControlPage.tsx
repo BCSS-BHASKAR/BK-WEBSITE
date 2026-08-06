@@ -2,278 +2,372 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Alert, Box, Button, Checkbox, Chip, CircularProgress, Dialog, DialogActions,
-  DialogContent, DialogTitle, MenuItem, Paper, Snackbar, Stack, Table, TableBody,
-  TableCell, TableContainer, TableHead, TableRow, TextField, Tooltip, Typography,
+  DialogContent, DialogTitle, Divider, FormControlLabel, IconButton, MenuItem, Paper,
+  Snackbar, Stack, Switch, Table, TableBody, TableCell, TableContainer, TableHead,
+  TableRow, TextField, Tooltip, Typography,
 } from "@mui/material";
-import AddIcon from "@mui/icons-material/Add";
-import LockIcon from "@mui/icons-material/Lock";
+import PersonAddAltIcon from "@mui/icons-material/PersonAddAlt";
+import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
+import KeyOutlinedIcon from "@mui/icons-material/KeyOutlined";
+import VerifiedUserIcon from "@mui/icons-material/VerifiedUser";
 import { api } from "../lib/api";
 import { contentCardSx, pageLayoutSx } from "../lib/uiSurfaces";
 import { tableCellSx, tableHeadSx } from "../components/monitoring/monitoringTokens";
 import { usePermissions } from "../lib/permissions";
 
 type Page = { key: string; label: string; group: string; route: string };
-type Role = {
-  role: string; label: string; description: string | null;
-  isBuiltin: boolean; userCount: number; pages: string[];
+type User = {
+  id: number; email: string; role: "admin" | "user";
+  disabledAt: string | null; mustChangePassword: boolean; pages: string[];
 };
-type User = { id: number; email: string; role: string; disabled_at: string | null };
 
-// Pages the admin role can never lose - the server enforces this too, but
-// showing them as locked explains why the checkbox will not move.
-const LOCKED_FOR_ADMIN = new Set(["settings", "access_control"]);
+/**
+ * Page selection checkboxes, grouped by section.
+ *
+ * Administrators are not shown a selection - they hold every page implicitly,
+ * so ticking boxes for them would imply a choice that does not exist.
+ */
+function PagePicker({
+  pages, selected, onToggle, onBulk, disabled,
+}: {
+  pages: Page[];
+  selected: Set<string>;
+  onToggle: (key: string) => void;
+  onBulk: (keys: string[], on: boolean) => void;
+  disabled?: boolean;
+}) {
+  const grouped = useMemo(() => {
+    const g: Record<string, Page[]> = {};
+    for (const p of pages) (g[p.group] ||= []).push(p);
+    return g;
+  }, [pages]);
+
+  return (
+    <Box>
+      {Object.entries(grouped).map(([group, list]) => {
+        const keys = list.map((p) => p.key);
+        const all = keys.every((k) => selected.has(k));
+        return (
+          <Box key={group} sx={{ mb: 1.5 }}>
+            <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between" }}>
+              <Typography
+                variant="caption"
+                sx={{ fontWeight: 800, letterSpacing: "0.07em", textTransform: "uppercase", color: "text.secondary" }}
+              >
+                {group}
+              </Typography>
+              <Button size="small" disabled={disabled} onClick={() => onBulk(keys, !all)}>
+                {all ? "Clear" : "Select all"}
+              </Button>
+            </Stack>
+            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 0 }}>
+              {list.map((p) => (
+                <FormControlLabel
+                  key={p.key}
+                  disabled={disabled}
+                  control={
+                    <Checkbox size="small" checked={selected.has(p.key)} onChange={() => onToggle(p.key)} />
+                  }
+                  label={
+                    <Box>
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>{p.label}</Typography>
+                      <Typography variant="caption" color="text.secondary">{p.route}</Typography>
+                    </Box>
+                  }
+                  sx={{ alignItems: "flex-start", mr: 0, py: 0.25 }}
+                />
+              ))}
+            </Box>
+          </Box>
+        );
+      })}
+    </Box>
+  );
+}
 
 export function AccessControlPage() {
   const qc = useQueryClient();
   const { role: myRole } = usePermissions();
-  const [draft, setDraft] = useState<Record<string, Set<string>>>({});
   const [toast, setToast] = useState<string | null>(null);
-  const [newRoleOpen, setNewRoleOpen] = useState(false);
-  const [newRole, setNewRole] = useState({ role: "", label: "" });
+
+  const [addOpen, setAddOpen] = useState(false);
+  const [form, setForm] = useState({
+    email: "", password: "", role: "user" as "admin" | "user", mustChangePassword: true,
+  });
+  const [formPages, setFormPages] = useState<Set<string>>(new Set());
+
+  const [editUser, setEditUser] = useState<User | null>(null);
+  const [editPages, setEditPages] = useState<Set<string>>(new Set());
+  const [pwUser, setPwUser] = useState<User | null>(null);
+  const [newPassword, setNewPassword] = useState("");
 
   const pagesQ = useQuery({
     queryKey: ["rbac", "pages"],
     queryFn: async () => (await api.get("/rbac/pages")).data as { pages: Page[] },
-  });
-  const rolesQ = useQuery({
-    queryKey: ["rbac", "roles"],
-    queryFn: async () => (await api.get("/rbac/roles")).data as { roles: Role[] },
   });
   const usersQ = useQuery({
     queryKey: ["rbac", "users"],
     queryFn: async () => (await api.get("/rbac/users")).data as { users: User[] },
   });
 
-  // Seed the editable draft from the server state.
   useEffect(() => {
-    if (!rolesQ.data) return;
-    setDraft(Object.fromEntries(rolesQ.data.roles.map((r) => [r.role, new Set(r.pages)])));
-  }, [rolesQ.data]);
+    if (editUser) setEditPages(new Set(editUser.pages));
+  }, [editUser]);
 
-  const grouped = useMemo(() => {
-    const g: Record<string, Page[]> = {};
-    for (const p of pagesQ.data?.pages ?? []) (g[p.group] ||= []).push(p);
-    return g;
-  }, [pagesQ.data]);
+  const allPages = pagesQ.data?.pages ?? [];
+  const refresh = () => qc.invalidateQueries({ queryKey: ["rbac"] });
+  const fail = (e: any) => setToast(e?.response?.data?.message ?? "Something went wrong.");
 
-  const saveRole = useMutation({
-    mutationFn: async (role: string) =>
-      (await api.put(`/rbac/roles/${role}/pages`, { pages: Array.from(draft[role] ?? []) })).data,
+  const createUser = useMutation({
+    mutationFn: async () =>
+      (await api.post("/rbac/users", { ...form, pages: Array.from(formPages) })).data,
     onSuccess: (d: any) => {
-      setToast(
-        d.forcedPages?.length
-          ? "Saved. Settings and Roles & Access were kept for admin to prevent lockout."
-          : `Access updated for “${d.role}”.`
-      );
-      qc.invalidateQueries({ queryKey: ["rbac"] });
+      setAddOpen(false);
+      setForm({ email: "", password: "", role: "user", mustChangePassword: true });
+      setFormPages(new Set());
+      setToast(`${d.email} created with access to ${d.pages.length} page${d.pages.length === 1 ? "" : "s"}.`);
+      refresh();
     },
-    onError: (e: any) => setToast(e?.response?.data?.message ?? "Could not save access."),
+    onError: fail,
   });
 
-  const createRole = useMutation({
-    mutationFn: async () => (await api.post("/rbac/roles", newRole)).data,
-    onSuccess: () => {
-      setNewRoleOpen(false);
-      setNewRole({ role: "", label: "" });
-      setToast("Role created. Tick the pages it should reach, then save.");
-      qc.invalidateQueries({ queryKey: ["rbac"] });
-    },
-    onError: (e: any) => setToast(e?.response?.data?.message ?? "Could not create role."),
+  const savePages = useMutation({
+    mutationFn: async () =>
+      (await api.put(`/rbac/users/${editUser!.id}/pages`, { pages: Array.from(editPages) })).data,
+    onSuccess: () => { setEditUser(null); setToast("Access updated. It applies immediately."); refresh(); },
+    onError: fail,
   });
 
-  const setUserRole = useMutation({
+  const setRole = useMutation({
     mutationFn: async (v: { id: number; role: string }) =>
       (await api.put(`/rbac/users/${v.id}/role`, { role: v.role })).data,
-    onSuccess: (d: any) => {
-      setToast(d.note ? `Role updated. ${d.note}` : "Role updated.");
-      qc.invalidateQueries({ queryKey: ["rbac"] });
-    },
-    onError: (e: any) => setToast(e?.response?.data?.message ?? "Could not change role."),
+    onSuccess: (d: any) => { setToast(d.note || "Role updated."); refresh(); },
+    onError: fail,
   });
 
-  const toggle = (role: string, page: string) => {
-    setDraft((d) => {
-      const next = new Set(d[role] ?? []);
-      next.has(page) ? next.delete(page) : next.add(page);
-      return { ...d, [role]: next };
-    });
+  const setStatus = useMutation({
+    mutationFn: async (v: { id: number; disabled: boolean }) =>
+      (await api.put(`/rbac/users/${v.id}/status`, { disabled: v.disabled })).data,
+    onSuccess: () => { setToast("Account status updated."); refresh(); },
+    onError: fail,
+  });
+
+  const resetPassword = useMutation({
+    mutationFn: async () =>
+      (await api.put(`/rbac/users/${pwUser!.id}/password`, { password: newPassword })).data,
+    onSuccess: (d: any) => { setPwUser(null); setNewPassword(""); setToast(d.note || "Password reset."); },
+    onError: fail,
+  });
+
+  const toggleIn = (set: Set<string>, setter: (s: Set<string>) => void) => (key: string) => {
+    const next = new Set(set);
+    next.has(key) ? next.delete(key) : next.add(key);
+    setter(next);
+  };
+  const bulkIn = (set: Set<string>, setter: (s: Set<string>) => void) => (keys: string[], on: boolean) => {
+    const next = new Set(set);
+    keys.forEach((k) => (on ? next.add(k) : next.delete(k)));
+    setter(next);
   };
 
-  const dirty = (role: string) => {
-    const server = new Set(rolesQ.data?.roles.find((r) => r.role === role)?.pages ?? []);
-    const local = draft[role] ?? new Set();
-    if (server.size !== local.size) return true;
-    for (const k of local) if (!server.has(k)) return true;
-    return false;
-  };
-
-  if (pagesQ.isLoading || rolesQ.isLoading) {
+  if (pagesQ.isLoading || usersQ.isLoading) {
     return <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}><CircularProgress /></Box>;
   }
-
-  const roles = rolesQ.data?.roles ?? [];
+  const users = usersQ.data?.users ?? [];
 
   return (
     <Box sx={pageLayoutSx}>
       <Stack direction="row" sx={{ alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 1 }}>
         <Box>
-          <Typography variant="h5" sx={{ fontWeight: 800 }}>Roles &amp; Access</Typography>
+          <Typography variant="h5" sx={{ fontWeight: 800 }}>Users &amp; Access</Typography>
           <Typography variant="body2" color="text.secondary">
-            Tick the pages each role can open. Unticked pages are hidden from the menu and refused by the API.
+            Add a user and tick the pages they can open. Administrators always have everything.
           </Typography>
         </Box>
-        <Button size="small" variant="outlined" startIcon={<AddIcon />} onClick={() => setNewRoleOpen(true)}>
-          New role
+        <Button variant="contained" size="small" startIcon={<PersonAddAltIcon />} onClick={() => setAddOpen(true)}>
+          Add user
         </Button>
       </Stack>
 
       <Alert severity="info">
-        Access is enforced in two places: the menu hides what a role cannot reach, and the API
-        independently refuses the underlying data — so a hidden page cannot be reached by typing its URL.
-        Changes apply immediately, without the user signing out.
+        Access is enforced twice: the menu hides what an account cannot reach, and the API independently
+        refuses the underlying data — so a hidden page cannot be reached by typing its URL. Changes apply
+        immediately, without the user signing out.
       </Alert>
 
-      {/* Permission matrix: pages down, roles across. */}
       <Paper sx={{ ...contentCardSx, p: 0, overflow: "hidden" }}>
-        <TableContainer sx={{ maxHeight: 620 }}>
-          <Table size="small" stickyHeader>
-            <TableHead>
-              <TableRow>
-                <TableCell sx={{ ...tableHeadSx, minWidth: 230 }}>Page</TableCell>
-                {roles.map((r) => (
-                  <TableCell key={r.role} sx={{ ...tableHeadSx, textAlign: "center", minWidth: 118 }}>
-                    <Box>{r.label}</Box>
-                    <Box sx={{ fontWeight: 600, textTransform: "none", letterSpacing: 0, opacity: 0.7 }}>
-                      {r.userCount} user{r.userCount === 1 ? "" : "s"}
-                    </Box>
-                  </TableCell>
-                ))}
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {Object.entries(grouped).flatMap(([group, pages]) => [
-                <TableRow key={`grp-${group}`}>
-                  <TableCell
-                    colSpan={roles.length + 1}
-                    sx={{ ...tableCellSx, bgcolor: "rgba(15,23,42,0.02)", fontSize: 11,
-                          textTransform: "uppercase", letterSpacing: "0.06em", color: "text.secondary" }}
-                  >
-                    {group}
-                  </TableCell>
-                </TableRow>,
-                ...pages.map((p) => (
-                  <TableRow key={p.key} hover>
-                    <TableCell sx={tableCellSx}>
-                      {p.label}
-                      <Box component="span" sx={{ ml: 1, fontSize: 11, color: "text.secondary", fontWeight: 500 }}>
-                        {p.route}
-                      </Box>
-                    </TableCell>
-                    {roles.map((r) => {
-                      const locked = r.role === "admin" && LOCKED_FOR_ADMIN.has(p.key);
-                      const checked = draft[r.role]?.has(p.key) ?? false;
-                      return (
-                        <TableCell key={r.role} sx={{ ...tableCellSx, textAlign: "center" }}>
-                          {locked ? (
-                            <Tooltip title="Always granted to administrators — prevents locking everyone out of access control.">
-                              <span>
-                                <Checkbox checked disabled size="small" icon={<LockIcon />} checkedIcon={<LockIcon />} />
-                              </span>
-                            </Tooltip>
-                          ) : (
-                            <Checkbox size="small" checked={checked} onChange={() => toggle(r.role, p.key)} />
-                          )}
-                        </TableCell>
-                      );
-                    })}
-                  </TableRow>
-                )),
-              ])}
-            </TableBody>
-          </Table>
-        </TableContainer>
-
-        <Stack direction="row" sx={{ p: 1.5, gap: 1, flexWrap: "wrap", alignItems: "center" }}>
-          {roles.map((r) => (
-            <Button
-              key={r.role} size="small"
-              variant={dirty(r.role) ? "contained" : "outlined"}
-              disabled={!dirty(r.role) || saveRole.isPending}
-              onClick={() => saveRole.mutate(r.role)}
-            >
-              Save {r.label}
-              {dirty(r.role) ? " *" : ""}
-            </Button>
-          ))}
-          <Box sx={{ flex: 1 }} />
-          <Typography variant="caption" color="text.secondary">
-            You are signed in as <strong>{myRole || "unknown"}</strong>
-          </Typography>
-        </Stack>
-      </Paper>
-
-      {/* User -> role assignment */}
-      <Paper sx={{ ...contentCardSx, p: 0, overflow: "hidden" }}>
-        <Typography variant="subtitle1" sx={{ fontWeight: 800, p: 2, pb: 1 }}>User accounts</Typography>
         <TableContainer>
           <Table size="small">
             <TableHead>
               <TableRow>
                 <TableCell sx={tableHeadSx}>Email</TableCell>
                 <TableCell sx={tableHeadSx}>Role</TableCell>
-                <TableCell sx={tableHeadSx}>Pages</TableCell>
+                <TableCell sx={tableHeadSx}>Pages they can open</TableCell>
                 <TableCell sx={tableHeadSx}>Status</TableCell>
+                <TableCell sx={{ ...tableHeadSx, textAlign: "right" }}>Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {(usersQ.data?.users ?? []).map((u) => {
-                const r = roles.find((x) => x.role === u.role);
-                return (
-                  <TableRow key={u.id} hover>
-                    <TableCell sx={tableCellSx}>{u.email}</TableCell>
-                    <TableCell sx={tableCellSx}>
-                      <TextField
-                        select size="small" value={u.role}
-                        onChange={(e) => setUserRole.mutate({ id: u.id, role: e.target.value })}
-                        sx={{ minWidth: 168 }}
-                      >
-                        {roles.map((x) => <MenuItem key={x.role} value={x.role}>{x.label}</MenuItem>)}
-                      </TextField>
-                    </TableCell>
-                    <TableCell sx={tableCellSx}>{r ? `${r.pages.length} of ${pagesQ.data?.pages.length}` : "—"}</TableCell>
-                    <TableCell sx={tableCellSx}>
-                      <Chip size="small" variant="outlined"
-                            color={u.disabled_at ? "default" : "success"}
-                            label={u.disabled_at ? "Disabled" : "Active"} sx={{ height: 22, fontSize: 11 }} />
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
+              {users.map((u) => (
+                <TableRow key={u.id} hover>
+                  <TableCell sx={tableCellSx}>{u.email}</TableCell>
+                  <TableCell sx={tableCellSx}>
+                    <TextField
+                      select size="small" value={u.role} sx={{ minWidth: 150 }}
+                      onChange={(e) => setRole.mutate({ id: u.id, role: e.target.value })}
+                    >
+                      <MenuItem value="admin">Administrator</MenuItem>
+                      <MenuItem value="user">User</MenuItem>
+                    </TextField>
+                  </TableCell>
+                  <TableCell sx={tableCellSx}>
+                    {u.role === "admin" ? (
+                      <Chip size="small" color="warning" variant="outlined" icon={<VerifiedUserIcon />}
+                            label="All pages" sx={{ height: 22, fontSize: 11 }} />
+                    ) : (
+                      <Stack direction="row" spacing={0.5} sx={{ flexWrap: "wrap", gap: 0.5 }}>
+                        {u.pages.length === 0 && (
+                          <Typography variant="caption" color="error">No pages — cannot see anything</Typography>
+                        )}
+                        {u.pages.slice(0, 4).map((k) => (
+                          <Chip key={k} size="small" variant="outlined" sx={{ height: 20, fontSize: 10 }}
+                                label={allPages.find((p) => p.key === k)?.label ?? k} />
+                        ))}
+                        {u.pages.length > 4 && (
+                          <Chip size="small" sx={{ height: 20, fontSize: 10 }} label={`+${u.pages.length - 4} more`} />
+                        )}
+                      </Stack>
+                    )}
+                  </TableCell>
+                  <TableCell sx={tableCellSx}>
+                    <Switch
+                      size="small" checked={!u.disabledAt}
+                      onChange={(e) => setStatus.mutate({ id: u.id, disabled: !e.target.checked })}
+                    />
+                    <Typography variant="caption" color="text.secondary">
+                      {u.disabledAt ? "Disabled" : "Active"}
+                    </Typography>
+                  </TableCell>
+                  <TableCell sx={{ ...tableCellSx, textAlign: "right", whiteSpace: "nowrap" }}>
+                    <Tooltip title={u.role === "admin" ? "Administrators always have every page" : "Choose pages"}>
+                      <span>
+                        <IconButton size="small" disabled={u.role === "admin"} onClick={() => setEditUser(u)}>
+                          <EditOutlinedIcon fontSize="small" />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                    <Tooltip title="Reset password">
+                      <IconButton size="small" onClick={() => setPwUser(u)}>
+                        <KeyOutlinedIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  </TableCell>
+                </TableRow>
+              ))}
             </TableBody>
           </Table>
         </TableContainer>
+        <Typography variant="caption" color="text.secondary" sx={{ display: "block", p: 1.5 }}>
+          Signed in as <strong>{myRole}</strong>. {users.filter((u) => u.role === "admin").length} administrator(s).
+        </Typography>
       </Paper>
 
-      <Dialog open={newRoleOpen} onClose={() => setNewRoleOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle>New role</DialogTitle>
-        <DialogContent>
-          <Stack spacing={2} sx={{ mt: 0.5 }}>
+      {/* Add user - role and page selection happen together */}
+      <Dialog open={addOpen} onClose={() => setAddOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Add user</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={2}>
             <TextField
-              label="Role key" size="small" fullWidth value={newRole.role}
-              onChange={(e) => setNewRole((r) => ({ ...r, role: e.target.value.toLowerCase() }))}
-              helperText="Lower case, 2-64 chars: a-z 0-9 _ -"
+              label="Email" size="small" fullWidth autoComplete="off" value={form.email}
+              onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
             />
             <TextField
-              label="Display name" size="small" fullWidth value={newRole.label}
-              onChange={(e) => setNewRole((r) => ({ ...r, label: e.target.value }))}
+              label="Temporary password" size="small" fullWidth type="text" autoComplete="new-password"
+              value={form.password} helperText="At least 8 characters."
+              onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
             />
+            <TextField
+              select label="Role" size="small" fullWidth value={form.role}
+              onChange={(e) => setForm((f) => ({ ...f, role: e.target.value as "admin" | "user" }))}
+              helperText={
+                form.role === "admin"
+                  ? "Administrators have every page, including user administration."
+                  : "Tick the pages this account can open."
+              }
+            >
+              <MenuItem value="user">User</MenuItem>
+              <MenuItem value="admin">Administrator</MenuItem>
+            </TextField>
+            <FormControlLabel
+              control={
+                <Checkbox size="small" checked={form.mustChangePassword}
+                          onChange={(e) => setForm((f) => ({ ...f, mustChangePassword: e.target.checked }))} />
+              }
+              label={<Typography variant="body2">Require a password change at first sign-in</Typography>}
+            />
+            <Divider />
+            {form.role === "admin" ? (
+              <Alert severity="warning" icon={<VerifiedUserIcon />}>
+                Administrators automatically have every page. There is nothing to select.
+              </Alert>
+            ) : (
+              <PagePicker
+                pages={allPages} selected={formPages}
+                onToggle={toggleIn(formPages, setFormPages)}
+                onBulk={bulkIn(formPages, setFormPages)}
+              />
+            )}
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setNewRoleOpen(false)}>Cancel</Button>
-          <Button variant="contained" disabled={!newRole.role || createRole.isPending}
-                  onClick={() => createRole.mutate()}>
-            Create
+          <Button onClick={() => setAddOpen(false)}>Cancel</Button>
+          <Button
+            variant="contained"
+            disabled={
+              createUser.isPending || !form.email || form.password.length < 8 ||
+              (form.role === "user" && formPages.size === 0)
+            }
+            onClick={() => createUser.mutate()}
+          >
+            {createUser.isPending ? "Creating…" : "Create user"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Edit an existing user's pages */}
+      <Dialog open={Boolean(editUser)} onClose={() => setEditUser(null)} maxWidth="sm" fullWidth>
+        <DialogTitle>Pages for {editUser?.email}</DialogTitle>
+        <DialogContent dividers>
+          <PagePicker
+            pages={allPages} selected={editPages}
+            onToggle={toggleIn(editPages, setEditPages)}
+            onBulk={bulkIn(editPages, setEditPages)}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditUser(null)}>Cancel</Button>
+          <Button variant="contained" disabled={savePages.isPending} onClick={() => savePages.mutate()}>
+            Save access
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={Boolean(pwUser)} onClose={() => setPwUser(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>Reset password</DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            {pwUser?.email} will be signed out everywhere and asked to set a new password.
+          </Typography>
+          <TextField
+            label="New password" size="small" fullWidth value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)} helperText="At least 8 characters."
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPwUser(null)}>Cancel</Button>
+          <Button variant="contained" disabled={newPassword.length < 8 || resetPassword.isPending}
+                  onClick={() => resetPassword.mutate()}>
+            Reset
           </Button>
         </DialogActions>
       </Dialog>

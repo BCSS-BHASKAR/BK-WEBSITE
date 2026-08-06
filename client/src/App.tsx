@@ -48,7 +48,7 @@ export default function App() {
           <Route path="/monitoring/:module" element={<MonitoringPage />} />
           <Route path="/monitoring" element={<Navigate to="/monitoring/walkins" replace />} />
           <Route path="/settings" element={<RequirePage page="settings" label="Settings"><SettingsPage /></RequirePage>} />
-          <Route path="/settings/access" element={<RequirePage page="access_control" label="Roles &amp; Access"><AccessControlPage /></RequirePage>} />
+          <Route path="/settings/access" element={<RequirePage page="access_control" label="Users &amp; Access"><AccessControlPage /></RequirePage>} />
           <Route path="/daily-briefing" element={<RequirePage page="daily_briefing" label="AI Daily Briefing"><DailyBriefingPage /></RequirePage>} />
           {/* Legacy report routes now point at their Monitoring equivalents.
               Kept as redirects so existing links and bookmarks keep working. */}

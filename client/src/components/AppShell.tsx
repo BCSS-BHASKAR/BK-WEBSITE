@@ -95,7 +95,7 @@ const nav: {
   { label: "Inference Viewer", path: "/inference", icon: <CameraOutdoorOutlinedIcon />, hiddenFromMenu: true },
   { label: "Known Faces", path: "/known-faces", icon: <FaceRetouchingNaturalOutlinedIcon />, page: "known_faces" },
   { label: "Settings", path: "/settings", icon: <SettingsOutlinedIcon />, page: "settings" },
-  { label: "Roles & Access", path: "/settings/access", icon: <AdminPanelSettingsOutlinedIcon />, page: "access_control" },
+  { label: "Users & Access", path: "/settings/access", icon: <AdminPanelSettingsOutlinedIcon />, page: "access_control" },
 
   // Parked until the Python assistant services are deployed — drop
   // hiddenFromMenu to put it back in the sidebar.

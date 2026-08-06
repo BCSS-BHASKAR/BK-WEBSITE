@@ -1,62 +1,68 @@
 "use strict";
 
-// Role-based access control API.
+// Access control: two roles, per-user page access.
 //
-// A user has one role; a role is granted a set of pages. Absence of a grant
-// means denied, so a newly added page is closed by default rather than
-// silently visible to everyone.
+//   admin -> every page, implicitly. Nothing to tick, cannot be reduced.
+//   user  -> exactly the pages selected on that person's account.
 //
-// LOCKOUT GUARD: the admin role always keeps 'settings' and 'access_control'.
-// Without it an administrator can untick their own box and permanently lock
-// every account out of the screen that grants access - unrecoverable without
-// direct database surgery.
+// Access is chosen per person when the account is created, rather than by
+// maintaining role tiers. Absence of a grant means denied, so a page added
+// later is closed for existing users until someone ticks it.
+//
+// The client hides what a user cannot reach; this API independently refuses the
+// underlying data (middleware/requirePageAccess.js). Hiding a menu item is not
+// security.
 
 const express = require("express");
+const bcrypt = require("bcrypt");
 const { pool } = require("../db");
 const { PAGES, PAGE_KEYS } = require("../lib/pages");
 const { requirePage, invalidatePermissionCache } = require("../middleware/requirePageAccess");
 
 const router = express.Router();
 
-const PROTECTED_ADMIN_PAGES = new Set(["settings", "access_control"]);
+const ROLES = [
+  { role: "admin", label: "Administrator", description: "Full access to every page, including user administration." },
+  { role: "user", label: "User", description: "Access limited to the pages selected on their account." },
+];
 
-// /me and /pages are readable by ANY authenticated user - a client cannot
-// render its own nav without them. Everything else administers access and is
-// gated on the access_control page.
+// Only administrators may administer accounts.
 const adminOnly = requirePage("access_control");
-
-async function audit(role, pageKey, action, actor, target = null) {
-  await pool
-    .query(
-      `INSERT INTO rbac_audit (role, page_key, action, target, changed_by)
-       VALUES (?, ?, ?, ?, ?)`,
-      [role, pageKey, action, target, actor]
-    )
-    .catch(() => {});
-}
 
 function actorOf(req) {
   return (req.user && (req.user.email || req.user.sub)) || null;
 }
 
-/**
- * Grant any page the catalogue knows about but the database has never seen to
- * the admin role. Keeps admin whole as pages are added, without opening them
- * to anyone else.
- */
+async function audit(action, target, actor, pageKey = null) {
+  await pool
+    .query(
+      `INSERT INTO rbac_audit (role, page_key, action, target, changed_by)
+       VALUES (?, ?, ?, ?, ?)`,
+      ["user", pageKey, action, target, actor]
+    )
+    .catch(() => {});
+}
+
+/** Pages a user can reach. Admin is implicitly everything. */
+async function pagesForUser(userId, role) {
+  if (role === "admin") return PAGE_KEYS.slice();
+  const [rows] = await pool.query(
+    `SELECT page_key FROM user_page_permission WHERE user_id = ?`,
+    [userId]
+  );
+  return rows.map((r) => r.page_key);
+}
+
 async function ensureRbacSeed() {
   try {
-    const [rows] = await pool.query(`SELECT page_key FROM role_page_permission WHERE role = 'admin'`);
-    const have = new Set(rows.map((r) => r.page_key));
-    const missing = PAGE_KEYS.filter((k) => !have.has(k));
-    for (const k of missing) {
+    for (const r of ROLES) {
       await pool.query(
-        `INSERT INTO role_page_permission (role, page_key, granted_by)
-         VALUES ('admin', ?, 'system') ON CONFLICT DO NOTHING`,
-        [k]
+        `INSERT INTO app_role (role, label, description, is_builtin)
+         VALUES (?, ?, ?, true)
+         ON CONFLICT (role) DO UPDATE SET label = EXCLUDED.label, description = EXCLUDED.description`,
+        [r.role, r.label, r.description]
       );
     }
-    if (missing.length) console.log(`[rbac] granted ${missing.length} new page(s) to admin`);
   } catch (e) {
     console.error("[rbac] seed failed:", e.message);
   }
@@ -65,177 +71,156 @@ async function ensureRbacSeed() {
 /** Effective permissions for the caller. Every client fetches this on load. */
 router.get("/me", async (req, res) => {
   try {
-    const role = String((req.user && req.user.role) || "").trim();
-    const [rows] = await pool.query(
-      `SELECT page_key FROM role_page_permission WHERE role = ?`,
-      [role]
-    );
-    const pages = rows.map((r) => r.page_key);
-    res.json({
-      role,
-      // An unknown role gets nothing rather than everything.
-      pages,
-      isAdmin: role === "admin",
-    });
+    const role = String((req.user && req.user.role) || "").trim().toLowerCase();
+    const userId = Number(req.user && req.user.id);
+    const pages = await pagesForUser(userId, role);
+    res.json({ role, pages, isAdmin: role === "admin" });
   } catch (e) {
     console.error("rbac me", e);
     res.status(500).json({ error: "server_error" });
   }
 });
 
-/** The page catalogue, for rendering the permission matrix. */
+/** The page catalogue, for rendering the selection checkboxes. */
 router.get("/pages", (_req, res) => {
   res.json({ pages: PAGES.map(({ key, label, group, route }) => ({ key, label, group, route })) });
 });
 
-/** Roles with their granted pages and how many users hold each. */
-router.get("/roles", adminOnly, async (_req, res) => {
-  try {
-    const [roles] = await pool.query(
-      `SELECT r.role, r.label, r.description, r.is_builtin,
-              (SELECT COUNT(*) FROM anpr_app_users u WHERE u.role = r.role) AS user_count
-         FROM app_role r ORDER BY r.is_builtin DESC, r.role`
-    );
-    const [perms] = await pool.query(`SELECT role, page_key FROM role_page_permission`);
-    const byRole = new Map();
-    for (const p of perms) {
-      if (!byRole.has(p.role)) byRole.set(p.role, []);
-      byRole.get(p.role).push(p.page_key);
-    }
-    res.json({
-      roles: roles.map((r) => ({
-        role: r.role,
-        label: r.label,
-        description: r.description,
-        isBuiltin: r.is_builtin,
-        userCount: Number(r.user_count || 0),
-        pages: byRole.get(r.role) || [],
-      })),
-    });
-  } catch (e) {
-    console.error("rbac roles", e);
-    res.status(500).json({ error: "server_error" });
-  }
-});
+/** The two roles. Kept as an endpoint so the UI never hardcodes them. */
+router.get("/roles", adminOnly, (_req, res) => res.json({ roles: ROLES }));
 
-/** Replace a role's page set - this is what the checkbox matrix saves. */
-router.put("/roles/:role/pages", adminOnly, async (req, res) => {
-  const role = String(req.params.role);
-  const requested = Array.isArray(req.body && req.body.pages) ? req.body.pages.map(String) : null;
-  if (!requested) return res.status(400).json({ error: "bad_request", message: "pages array required" });
-
-  const unknown = requested.filter((k) => !PAGE_KEYS.includes(k));
-  if (unknown.length) {
-    return res.status(400).json({ error: "bad_request", message: `unknown pages: ${unknown.join(", ")}` });
-  }
-
-  let pages = Array.from(new Set(requested));
-  let forced = [];
-  if (role === "admin") {
-    // Refuse to let the administrator revoke their own way back in.
-    forced = [...PROTECTED_ADMIN_PAGES].filter((k) => !pages.includes(k));
-    pages = Array.from(new Set([...pages, ...PROTECTED_ADMIN_PAGES]));
-  }
-
-  const actor = actorOf(req);
-  try {
-    const [[exists]] = await pool.query(`SELECT 1 AS ok FROM app_role WHERE role = ?`, [role]);
-    if (!exists) return res.status(404).json({ error: "unknown_role" });
-
-    const [before] = await pool.query(`SELECT page_key FROM role_page_permission WHERE role = ?`, [role]);
-    const had = new Set(before.map((r) => r.page_key));
-
-    await pool.query(`DELETE FROM role_page_permission WHERE role = ?`, [role]);
-    for (const k of pages) {
-      await pool.query(
-        `INSERT INTO role_page_permission (role, page_key, granted_by) VALUES (?, ?, ?)`,
-        [role, k, actor]
-      );
-    }
-    for (const k of pages) if (!had.has(k)) await audit(role, k, "grant", actor);
-    for (const k of had) if (!pages.includes(k)) await audit(role, k, "revoke", actor);
-    // Take effect now rather than after the cache TTL.
-    invalidatePermissionCache(role);
-
-    res.json({
-      ok: true, role, pages,
-      forcedPages: forced,
-      note: forced.length
-        ? "Settings and Roles & Access are always kept for the admin role to prevent lockout."
-        : undefined,
-    });
-  } catch (e) {
-    console.error("rbac put pages", e);
-    res.status(500).json({ error: "server_error", message: e.message });
-  }
-});
-
-/** Create a custom role. */
-router.post("/roles", adminOnly, async (req, res) => {
-  const role = String((req.body && req.body.role) || "").trim().toLowerCase();
-  const label = String((req.body && req.body.label) || "").trim() || role;
-  if (!/^[a-z0-9_-]{2,64}$/.test(role)) {
-    return res.status(400).json({ error: "bad_request", message: "role must be 2-64 chars, a-z 0-9 _ -" });
-  }
-  try {
-    await pool.query(
-      `INSERT INTO app_role (role, label, description) VALUES (?, ?, ?)
-       ON CONFLICT (role) DO NOTHING`,
-      [role, label, (req.body && req.body.description) || null]
-    );
-    await audit(role, null, "role_created", actorOf(req));
-    res.status(201).json({ ok: true, role });
-  } catch (e) {
-    console.error("rbac create role", e);
-    res.status(500).json({ error: "server_error" });
-  }
-});
-
-router.delete("/roles/:role", adminOnly, async (req, res) => {
-  const role = String(req.params.role);
-  try {
-    const [[r]] = await pool.query(`SELECT is_builtin FROM app_role WHERE role = ?`, [role]);
-    if (!r) return res.status(404).json({ error: "unknown_role" });
-    if (r.is_builtin) return res.status(400).json({ error: "bad_request", message: "built-in roles cannot be deleted" });
-    const [[u]] = await pool.query(`SELECT COUNT(*) AS n FROM anpr_app_users WHERE role = ?`, [role]);
-    if (Number(u.n) > 0) {
-      return res.status(400).json({ error: "bad_request", message: `${u.n} user(s) still hold this role` });
-    }
-    await pool.query(`DELETE FROM app_role WHERE role = ?`, [role]);
-    await audit(role, null, "role_deleted", actorOf(req));
-    res.json({ ok: true });
-  } catch (e) {
-    console.error("rbac delete role", e);
-    res.status(500).json({ error: "server_error" });
-  }
-});
-
-/** Users and their roles, for the assignment table. */
+/** Users with their individual page grants. */
 router.get("/users", adminOnly, async (_req, res) => {
   try {
-    const [rows] = await pool.query(
+    const [users] = await pool.query(
       `SELECT id, email, role, must_change_password, disabled_at, created_at
          FROM anpr_app_users ORDER BY id`
     );
-    res.json({ users: rows });
+    const [perms] = await pool.query(`SELECT user_id, page_key FROM user_page_permission`);
+    const byUser = new Map();
+    for (const p of perms) {
+      if (!byUser.has(p.user_id)) byUser.set(p.user_id, []);
+      byUser.get(p.user_id).push(p.page_key);
+    }
+    res.json({
+      users: users.map((u) => ({
+        id: u.id,
+        email: u.email,
+        role: u.role,
+        disabledAt: u.disabled_at,
+        mustChangePassword: Boolean(u.must_change_password),
+        // Admins are shown as holding everything, matching what they can do.
+        pages: u.role === "admin" ? PAGE_KEYS.slice() : byUser.get(u.id) || [],
+      })),
+    });
   } catch (e) {
     console.error("rbac users", e);
     res.status(500).json({ error: "server_error" });
   }
 });
 
-/** Assign a role to a user. */
+/**
+ * Create a user and choose their pages in the same step - this is where access
+ * is decided, rather than by assigning a pre-built role tier.
+ */
+router.post("/users", adminOnly, async (req, res) => {
+  const body = req.body || {};
+  const email = String(body.email || "").trim().toLowerCase();
+  const password = String(body.password || "");
+  const role = body.role === "admin" ? "admin" : "user";
+  const pages = Array.isArray(body.pages) ? body.pages.map(String) : [];
+
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    return res.status(400).json({ error: "bad_request", message: "A valid email is required." });
+  }
+  if (password.length < 8) {
+    return res.status(400).json({ error: "bad_request", message: "Password must be at least 8 characters." });
+  }
+  const unknown = pages.filter((k) => !PAGE_KEYS.includes(k));
+  if (unknown.length) {
+    return res.status(400).json({ error: "bad_request", message: `Unknown pages: ${unknown.join(", ")}` });
+  }
+  if (role === "user" && pages.length === 0) {
+    return res.status(400).json({
+      error: "bad_request",
+      message: "Select at least one page, otherwise this account can sign in but see nothing.",
+    });
+  }
+
+  try {
+    const [[dupe]] = await pool.query(`SELECT 1 AS ok FROM anpr_app_users WHERE lower(email) = ?`, [email]);
+    if (dupe) return res.status(409).json({ error: "conflict", message: "That email already has an account." });
+
+    const hash = await bcrypt.hash(password, 12);
+    const [ins] = await pool.query(
+      `INSERT INTO anpr_app_users (email, password_hash, role, must_change_password)
+       VALUES (?, ?, ?, ?) RETURNING id`,
+      [email, hash, role, body.mustChangePassword === false ? 0 : 1]
+    );
+    const userId = ins.insertId;
+
+    if (role !== "admin") {
+      for (const k of pages) {
+        await pool.query(
+          `INSERT INTO user_page_permission (user_id, page_key, granted_by) VALUES (?, ?, ?)`,
+          [userId, k, actorOf(req)]
+        );
+      }
+    }
+    await audit("user_created", email, actorOf(req));
+    invalidatePermissionCache();
+    res.status(201).json({
+      ok: true, id: userId, email, role,
+      pages: role === "admin" ? PAGE_KEYS.slice() : pages,
+    });
+  } catch (e) {
+    console.error("rbac create user", e);
+    res.status(500).json({ error: "server_error", message: e.message });
+  }
+});
+
+/** Change which pages an existing user can reach. */
+router.put("/users/:id/pages", adminOnly, async (req, res) => {
+  const id = Number(req.params.id);
+  const pages = Array.isArray(req.body && req.body.pages) ? req.body.pages.map(String) : null;
+  if (!Number.isFinite(id) || !pages) return res.status(400).json({ error: "bad_request" });
+
+  const unknown = pages.filter((k) => !PAGE_KEYS.includes(k));
+  if (unknown.length) return res.status(400).json({ error: "bad_request", message: `Unknown pages: ${unknown.join(", ")}` });
+
+  try {
+    const [[u]] = await pool.query(`SELECT email, role FROM anpr_app_users WHERE id = ?`, [id]);
+    if (!u) return res.status(404).json({ error: "not_found" });
+    if (u.role === "admin") {
+      return res.status(400).json({
+        error: "bad_request",
+        message: "Administrators always have every page. Change their role to User first.",
+      });
+    }
+    await pool.query(`DELETE FROM user_page_permission WHERE user_id = ?`, [id]);
+    for (const k of pages) {
+      await pool.query(
+        `INSERT INTO user_page_permission (user_id, page_key, granted_by) VALUES (?, ?, ?)`,
+        [id, k, actorOf(req)]
+      );
+    }
+    await audit("pages_changed", u.email, actorOf(req));
+    invalidatePermissionCache();
+    res.json({ ok: true, id, pages });
+  } catch (e) {
+    console.error("rbac set user pages", e);
+    res.status(500).json({ error: "server_error" });
+  }
+});
+
+/** Switch a user between administrator and user. */
 router.put("/users/:id/role", adminOnly, async (req, res) => {
   const id = Number(req.params.id);
-  const role = String((req.body && req.body.role) || "").trim();
-  if (!Number.isFinite(id)) return res.status(400).json({ error: "bad_request" });
+  const role = (req.body && req.body.role) === "admin" ? "admin" : "user";
   try {
-    const [[exists]] = await pool.query(`SELECT 1 AS ok FROM app_role WHERE role = ?`, [role]);
-    if (!exists) return res.status(400).json({ error: "bad_request", message: "unknown role" });
-
-    // Never allow the last administrator to demote themselves.
     const [[target]] = await pool.query(`SELECT email, role FROM anpr_app_users WHERE id = ?`, [id]);
     if (!target) return res.status(404).json({ error: "not_found" });
+
     if (target.role === "admin" && role !== "admin") {
       const [[admins]] = await pool.query(
         `SELECT COUNT(*) AS n FROM anpr_app_users WHERE role = 'admin' AND disabled_at IS NULL`
@@ -247,28 +232,88 @@ router.put("/users/:id/role", adminOnly, async (req, res) => {
         });
       }
     }
-
-    // token_version bumps so existing sessions re-authenticate with the new role.
+    // token_version bumps so live sessions re-authenticate with the new role.
     await pool.query(
       `UPDATE anpr_app_users SET role = ?, token_version = token_version + 1 WHERE id = ?`,
       [role, id]
     );
+    // Demoting to user leaves no page grants, so the account sees nothing until
+    // pages are ticked - safer than inheriting a stale set.
+    if (role === "admin") await pool.query(`DELETE FROM user_page_permission WHERE user_id = ?`, [id]);
+    await audit("role_changed", target.email, actorOf(req));
     invalidatePermissionCache();
-    await audit(role, null, "user_role_changed", actorOf(req), target.email);
-    res.json({ ok: true, id, role, note: "The user's existing sessions were invalidated." });
+    res.json({
+      ok: true, id, role,
+      note:
+        role === "user"
+          ? "Existing sessions were invalidated. Select the pages this account should reach."
+          : "Existing sessions were invalidated.",
+    });
   } catch (e) {
     console.error("rbac set user role", e);
     res.status(500).json({ error: "server_error" });
   }
 });
 
+/** Enable or disable an account without deleting it. */
+router.put("/users/:id/status", adminOnly, async (req, res) => {
+  const id = Number(req.params.id);
+  const disabled = Boolean(req.body && req.body.disabled);
+  try {
+    const [[target]] = await pool.query(`SELECT email, role FROM anpr_app_users WHERE id = ?`, [id]);
+    if (!target) return res.status(404).json({ error: "not_found" });
+    if (disabled && target.role === "admin") {
+      const [[admins]] = await pool.query(
+        `SELECT COUNT(*) AS n FROM anpr_app_users WHERE role = 'admin' AND disabled_at IS NULL`
+      );
+      if (Number(admins.n) <= 1) {
+        return res.status(400).json({ error: "bad_request", message: "Cannot disable the only administrator." });
+      }
+    }
+    await pool.query(
+      `UPDATE anpr_app_users
+          SET disabled_at = ${disabled ? "now()" : "NULL"}, token_version = token_version + 1
+        WHERE id = ?`,
+      [id]
+    );
+    await audit(disabled ? "user_disabled" : "user_enabled", target.email, actorOf(req));
+    invalidatePermissionCache();
+    res.json({ ok: true, id, disabled });
+  } catch (e) {
+    console.error("rbac set user status", e);
+    res.status(500).json({ error: "server_error" });
+  }
+});
+
+/** Reset a password. */
+router.put("/users/:id/password", adminOnly, async (req, res) => {
+  const id = Number(req.params.id);
+  const password = String((req.body && req.body.password) || "");
+  if (password.length < 8) {
+    return res.status(400).json({ error: "bad_request", message: "Password must be at least 8 characters." });
+  }
+  try {
+    const hash = await bcrypt.hash(password, 12);
+    const [r] = await pool.query(
+      `UPDATE anpr_app_users
+          SET password_hash = ?, must_change_password = 1, token_version = token_version + 1
+        WHERE id = ?`,
+      [hash, id]
+    );
+    if (!r.affectedRows) return res.status(404).json({ error: "not_found" });
+    await audit("password_reset", String(id), actorOf(req));
+    res.json({ ok: true, note: "Existing sessions were invalidated." });
+  } catch (e) {
+    console.error("rbac reset password", e);
+    res.status(500).json({ error: "server_error" });
+  }
+});
+
 router.get("/audit", adminOnly, async (_req, res) => {
   try {
-    const [rows] = await pool.query(
-      `SELECT * FROM rbac_audit ORDER BY changed_at DESC LIMIT 200`
-    );
+    const [rows] = await pool.query(`SELECT * FROM rbac_audit ORDER BY changed_at DESC LIMIT 200`);
     res.json({ rows });
-  } catch (e) {
+  } catch {
     res.status(500).json({ error: "server_error" });
   }
 });
