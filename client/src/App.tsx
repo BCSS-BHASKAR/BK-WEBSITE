@@ -16,7 +16,6 @@ import { AssistantEnhancePage } from "./pages/AssistantEnhancePage";
 import { AssistantEnhanceDebugPage } from "./pages/AssistantEnhanceDebugPage";
 import { ChallanEmailPage } from "./pages/ChallanEmailPage";
 import { ChallanHistoryPage } from "./pages/ChallanHistoryPage";
-import { DailyBriefingPage } from "./pages/DailyBriefingPage";
 import { VehicleJourneyPage } from "./pages/VehicleJourneyPage";
 import { KnownFacesPage } from "./pages/KnownFacesPage";
 import { InferenceViewerPage } from "./pages/InferenceViewerPage";
@@ -47,7 +46,6 @@ export default function App() {
           <Route path="/assistant_enhance/debug" element={<AssistantEnhanceDebugPage />} />
           <Route path="/challan-email" element={<ChallanEmailPage />} />
           <Route path="/challan-history" element={<ChallanHistoryPage />} />
-          <Route path="/daily-briefing" element={<DailyBriefingPage />} />
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/dashboard" replace />} />

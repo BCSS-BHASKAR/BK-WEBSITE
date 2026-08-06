@@ -41,7 +41,6 @@ import { AppFooter } from "./AppFooter";
 import CheckCircleOutlinedIcon from "@mui/icons-material/CheckCircleOutlined";
 import SmartToyOutlinedIcon from "@mui/icons-material/SmartToyOutlined";
 import ReceiptLongOutlinedIcon from "@mui/icons-material/ReceiptLongOutlined";
-import AutoAwesomeOutlinedIcon from "@mui/icons-material/AutoAwesomeOutlined";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import FaceRetouchingNaturalOutlinedIcon from "@mui/icons-material/FaceRetouchingNaturalOutlined";
 import CameraOutdoorOutlinedIcon from "@mui/icons-material/CameraOutdoorOutlined";
@@ -68,7 +67,6 @@ const nav: {
   hiddenFromMenu?: boolean;
 }[] = [
   { label: SITE_LABELS.operationalDashboardsNavShort, path: "/dashboard", icon: <DashboardIcon /> },
-  { label: "AI Daily Briefing", path: "/daily-briefing", icon: <AutoAwesomeOutlinedIcon /> },
 
   // These four mirror the dashboard KPI tiles — same label, same order, and the
   // same destination as the tile's click-through.
@@ -77,7 +75,7 @@ const nav: {
   { label: "Active Alerts", path: "/crowds-report", icon: <WarningAmberRoundedIcon /> },
   { label: SITE_LABELS.liveView, path: "/live-view", icon: <VideocamRoundedIcon /> },
 
-  { label: "Known Faces", path: "/known-faces", icon: <FaceRetouchingNaturalOutlinedIcon /> },
+  { label: "Known Faces", path: "/known-faces", icon: <FaceRetouchingNaturalOutlinedIcon />, hiddenFromMenu: true },
   { label: "Inference Viewer", path: "/inference", icon: <CameraOutdoorOutlinedIcon /> },
 
   // Parked until the Python assistant services are deployed — drop
@@ -123,7 +121,6 @@ function navItemSx(selected: boolean, sidebarExpanded: boolean) {
 
 const navPageTitle: Record<string, string> = {
   "/dashboard": SITE_LABELS.operationalDashboards,
-  "/daily-briefing": "AI Daily Briefing",
   "/violations": SITE_LABELS.trafficViolations,
   "/vehicle-report": SITE_LABELS.anprRecords,
   "/walkins-report": "Walk-ins",
@@ -139,7 +136,6 @@ const navPageTitle: Record<string, string> = {
 
 const navPageSubtitle: Record<string, string> = {
   "/dashboard": SITE_LABELS.operationalDashboardsSubtitle,
-  "/daily-briefing": "Executive brief — narrative insights and recommendations for venue management.",
   "/violations": SITE_LABELS.violationEventGrid,
   "/vehicle-report": SITE_LABELS.anprRecordsPageSubtitle,
   "/walkins-report": SITE_LABELS.walkinsRecordsPageSubtitle,
