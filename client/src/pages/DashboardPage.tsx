@@ -4,6 +4,7 @@ import CircleIcon from "@mui/icons-material/Circle";
 import { InferenceAnalyticsView } from "../components/dashboard/InferenceAnalyticsView";
 import { pageLayoutSx } from "../lib/uiSurfaces";
 import { api } from "../lib/api";
+import { useAutoRefreshMs } from "../lib/useAppSettings";
 
 // The dashboard is an analytical view over what the on-prem CV services
 // actually capture (walk-ins, loitering, intrusion, after-hours), read from the
@@ -41,6 +42,7 @@ function IngestStatus() {
 }
 
 export function DashboardPage() {
+  const refreshSecs = Math.round(useAutoRefreshMs() / 1000);
   return (
     <Box sx={pageLayoutSx}>
       <Stack
@@ -51,7 +53,7 @@ export function DashboardPage() {
         <Typography variant="h5" sx={{ fontWeight: 800 }}>Operations Analytics</Typography>
         <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
           <IngestStatus />
-          <Chip size="small" variant="outlined" label="Auto-refresh 60s" sx={{ height: 22, fontSize: 11 }} />
+          <Chip size="small" variant="outlined" label={`Auto-refresh ${refreshSecs}s`} sx={{ height: 22, fontSize: 11 }} />
         </Stack>
       </Stack>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>

@@ -15,6 +15,7 @@ import {
 } from "../components/monitoring/MonitoringEventsTable";
 import { MonitoringMediaViewer } from "../components/monitoring/MonitoringMediaViewer";
 import { filterFieldSx } from "../components/monitoring/monitoringTokens";
+import { useAutoRefreshMs } from "../lib/useAppSettings";
 
 // Active Alerts is the cross-module view of everything that warrants attention.
 //
@@ -36,6 +37,7 @@ type TimelineRow = MonitoringRow & { service: string; occurred_at: string };
 export function ActiveAlertsPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const refetchInterval = useAutoRefreshMs();
   const [service, setService] = useState<string>("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -76,6 +78,7 @@ export function ActiveAlertsPage() {
         ? d
         : { total: d.total, rows: d.rows.filter((r) => r.service !== "walkins") };
     },
+    refetchInterval,
   });
 
   const camerasQ = useQuery({

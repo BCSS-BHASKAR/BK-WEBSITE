@@ -17,6 +17,7 @@ import {
 import { api } from "../../lib/api";
 import { contentCardSx } from "../../lib/uiSurfaces";
 import { MODULE_BY_KEY, type InferenceModuleKey } from "../../lib/inferenceModules";
+import { useAutoRefreshMs } from "../../lib/useAppSettings";
 
 // ---------------------------------------------------------------------------
 // Palette
@@ -123,20 +124,21 @@ function ChartCard({ title, subtitle, height = 190, children }: {
 
 export function InferenceAnalyticsView() {
   const navigate = useNavigate();
+  const refetchInterval = useAutoRefreshMs();
   const { data: stats, isLoading: lStats } = useQuery({
     queryKey: ["inference", "stats", 14],
     queryFn: async () => (await api.get("/inference/stats", { params: { days: 14 } })).data as Stats,
-    refetchInterval: 60_000,
+    refetchInterval,
   });
   const { data: summary, isLoading: lSum } = useQuery({
     queryKey: ["inference", "summary"],
     queryFn: async () => (await api.get("/inference/summary")).data as Summary,
-    refetchInterval: 60_000,
+    refetchInterval,
   });
   const { data: recent } = useQuery({
     queryKey: ["inference", "recent"],
     queryFn: async () => (await api.get("/inference/timeline", { params: { pageSize: 12 } })).data,
-    refetchInterval: 60_000,
+    refetchInterval,
   });
   const { data: facets } = useQuery({
     queryKey: ["inference", "facets"],

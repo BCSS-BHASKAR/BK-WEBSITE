@@ -15,6 +15,7 @@ import {
   EMPTY_FILTERS, MonitoringFilters, type MonitoringFilterState,
 } from "../components/monitoring/MonitoringFilters";
 import { getAccessToken } from "../auth/tokenStore";
+import { useAutoRefreshMs } from "../lib/useAppSettings";
 
 const PAGE_SIZE = 25;
 
@@ -30,6 +31,8 @@ export function MonitoringPage() {
   const { module: slug } = useParams<{ module: string }>();
   const mod = moduleByRouteSlug(slug || "");
   const qc = useQueryClient();
+  // Interval comes from Settings > General, not a constant.
+  const refetchInterval = useAutoRefreshMs();
 
   const [filters, setFilters] = useState<MonitoringFilterState>({ ...EMPTY_FILTERS });
   const [page, setPage] = useState(1);
@@ -64,6 +67,7 @@ export function MonitoringPage() {
     queryKey: ["monitoring", key, "kpis", scopeParams],
     queryFn: async () => (await api.get(`/inference/kpis/${key}`, { params: scopeParams })).data as ModuleKpis,
     enabled,
+    refetchInterval,
   });
   const analyticsQ = useQuery({
     queryKey: ["monitoring", key, "analytics", scopeParams],
@@ -77,6 +81,7 @@ export function MonitoringPage() {
         total: number; rows: MonitoringRow[];
       },
     enabled,
+    refetchInterval,
   });
   const camerasQ = useQuery({
     queryKey: ["monitoring", "cameras"],
