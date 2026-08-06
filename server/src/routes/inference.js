@@ -61,9 +61,12 @@ async function withMedia(rows) {
       if (r.s3_key) {
         out.mediaUrl = await presignGet(r.s3_key, { downloadName: r.s3_key.split("/").pop() });
         out.isVideo = String(r.content_type || "").startsWith("video");
-        // A video with no poster renders as a black box, so hand the UI a
-        // cached frame instead. Signed separately - <img> cannot send headers.
-        if (out.isVideo && hasPoster(r.id)) out.posterUrl = posterUrl(r.id);
+        // Posters are keyed by media_asset.id. Most rows here are SERVICE rows
+        // (loitering_event.id etc.) whose id is unrelated to the asset id, so
+        // keying on r.id would miss - or worse, silently return another clip's
+        // frame. Always use the explicitly selected asset id.
+        const assetId = r.asset_id != null ? r.asset_id : r.id;
+        if (out.isVideo && hasPoster(assetId)) out.posterUrl = posterUrl(assetId);
       }
       delete out.s3_key;
       if (r.face_s3_key) {
@@ -148,7 +151,7 @@ router.get("/after-hours", async (req, res) => {
     await listEndpoint(res, {
       countSql: `SELECT COUNT(*) AS total FROM after_hours_sighting s ${f.sql}`,
       rowsSql: `SELECT s.id, s.camera_key, s.captured_at, s.tag, s.global_id, s.session_id,
-                       m.s3_key, m.size_bytes, m.content_type
+                       m.s3_key, m.size_bytes, m.content_type, m.id AS asset_id
                   FROM after_hours_sighting s JOIN media_asset m ON m.id = s.asset_id
                   ${f.sql} ORDER BY s.captured_at DESC LIMIT ? OFFSET ?`,
       params: f.params, page, pageSize, offset,
@@ -173,7 +176,7 @@ router.get("/loitering", async (req, res) => {
     await listEndpoint(res, {
       countSql: `SELECT COUNT(*) AS total FROM loitering_event l ${sql}`,
       rowsSql: `SELECT l.id, l.stream AS camera_key, l.started_at, l.dwell_seconds,
-                       l.global_id, l.session_id, m.s3_key, m.size_bytes, m.content_type
+                       l.global_id, l.session_id, m.s3_key, m.size_bytes, m.content_type, m.id AS asset_id
                   FROM loitering_event l JOIN media_asset m ON m.id = l.asset_id
                   ${sql} ORDER BY l.started_at DESC LIMIT ? OFFSET ?`,
       params: extra, page, pageSize, offset,
@@ -190,7 +193,7 @@ router.get("/intrusion", async (req, res) => {
     const f = buildFilters(req, "i.occurred_at", "i.camera_key");
     await listEndpoint(res, {
       countSql: `SELECT COUNT(*) AS total FROM intrusion_event i ${f.sql}`,
-      rowsSql: `SELECT i.id, i.camera_key, i.occurred_at, m.s3_key, m.size_bytes, m.content_type
+      rowsSql: `SELECT i.id, i.camera_key, i.occurred_at, m.s3_key, m.size_bytes, m.content_type, m.id AS asset_id
                   FROM intrusion_event i LEFT JOIN media_asset m ON m.id = i.asset_id
                   ${f.sql} ORDER BY i.occurred_at DESC LIMIT ? OFFSET ?`,
       params: f.params, page, pageSize, offset,
@@ -244,7 +247,7 @@ router.get("/walkins", async (req, res) => {
       `SELECT d.id, d.camera_key, d.track_id, d.raw_track_id, d.detected_at,
               d.bbox, d.confidence, d.upper_garment, d.lower_garment,
               d.face_quality, d.mode,
-              m.s3_key, m.size_bytes, m.content_type,
+              m.s3_key, m.size_bytes, m.content_type, m.id AS asset_id,
               fm.s3_key AS face_s3_key
          FROM walkin_detection d
          LEFT JOIN media_asset m  ON m.id  = d.crop_asset_id
@@ -315,7 +318,7 @@ router.get("/timeline", async (req, res) => {
     await listEndpoint(res, {
       countSql: `SELECT COUNT(*) AS total FROM inference_timeline t ${sql}`,
       rowsSql: `SELECT t.service, t.id, t.camera_key, t.occurred_at, t.dwell_seconds, t.global_id,
-                       m.s3_key, m.content_type
+                       m.s3_key, m.content_type, m.id AS asset_id
                   FROM inference_timeline t LEFT JOIN media_asset m ON m.id = t.asset_id
                   ${sql} ORDER BY t.occurred_at DESC LIMIT ? OFFSET ?`,
       params, page, pageSize, offset,
@@ -390,7 +393,7 @@ router.get("/media", async (req, res) => {
     const sql = where.length ? `WHERE ${where.join(" AND ")}` : "";
     await listEndpoint(res, {
       countSql: `SELECT COUNT(*) AS total FROM media_asset m ${sql}`,
-      rowsSql: `SELECT m.id, m.camera_key, m.service, m.artefact_type, m.content_type,
+      rowsSql: `SELECT m.id, m.id AS asset_id, m.camera_key, m.service, m.artefact_type, m.content_type,
                        m.size_bytes, m.captured_at, m.folder_date, m.s3_key
                   FROM media_asset m ${sql}
                  ORDER BY m.captured_at DESC NULLS LAST, m.id DESC
