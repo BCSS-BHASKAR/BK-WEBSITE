@@ -16,6 +16,18 @@ server/ml_retraining/
 /aiserver_anpr_last_3_days.sql
 /*.sql.bak
 
+# Database server data directories must never be committed. server/mysql_data/
+# was tracked before the PostgreSQL migration (219 MB of InnoDB tablespaces,
+# binlogs and auto-generated TLS keys); these patterns stop any local datadir
+# from being re-added.
+server/mysql_data/
+*.ibd
+ibdata[0-9]*
+binlog.*
+undo_[0-9]*
+*.dblwr
+pgdata/
+
 # Local launcher (also covered by *.sh, listed explicitly per request)
 start_all.sh
 

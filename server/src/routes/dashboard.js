@@ -577,7 +577,7 @@ async function buildWalkinsTimeline(pool, from, to, spanDays, whereSql, basePara
       baseParams
     );
     timeline = rows.map((r) => ({
-      label: String(r.bucket),
+      label: ymdFromDbDate(r.bucket),
       total: Number(r.total || 0),
     }));
   }
@@ -785,7 +785,7 @@ async function buildCrowdsTimeline(pool, from, to, spanDays, whereSql, baseParam
       baseParams
     );
     timeline = rows.map((r) => ({
-      label: String(r.bucket),
+      label: ymdFromDbDate(r.bucket),
       total: Number(r.alerts || 0),
       byAlertType: crowdTypeCounts(r),
       peakPeople: Number(r.peakPeople || 0),
@@ -937,7 +937,7 @@ router.get("/range-stats", async (req, res) => {
         baseParams
       );
       timeline = rows.map((r) => ({
-        label: String(r.bucket),
+        label: ymdFromDbDate(r.bucket),
         total: Number(r.total || 0),
       }));
     }

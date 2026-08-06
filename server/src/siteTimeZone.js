@@ -26,6 +26,16 @@ function hourNowSite() {
 
 function ymdFromDbDate(v) {
   if (v == null || v === "") return "";
+  // A DATE/TIMESTAMP column arrives as a JS Date from node-postgres (mysql2 did
+  // the same). String(date) is an RFC-style string the regex below cannot read,
+  // so it would fall through and leak "Mon Jul 06 2026 00:00:00 GMT+0530 ..."
+  // into bucket labels and drillDay values. Read the calendar date off directly;
+  // the driver builds these at local midnight, so the local getters are correct.
+  if (v instanceof Date) {
+    if (Number.isNaN(v.getTime())) return "";
+    const p = (n) => String(n).padStart(2, "0");
+    return `${v.getFullYear()}-${p(v.getMonth() + 1)}-${p(v.getDate())}`;
+  }
   const s = String(v).trim();
   const m = /^(\d{4}-\d{2}-\d{2})(?:[ T](\d{2}):(\d{2}):(\d{2}))?/.exec(s);
   if (!m) return s;
