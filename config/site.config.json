@@ -1,0 +1,47 @@
+{
+  "locale": "en",
+  "region": {
+    "label": "India",
+    "countryCode": "IN"
+  },
+  "timezone": {
+    "db": {
+      "iana": "Asia/Kolkata",
+      "sqlOffset": "+05:30",
+      "label": "IST (DB wall clock)"
+    },
+    "display": {
+      "iana": "Asia/Kolkata",
+      "sqlOffset": "+05:30",
+      "label": "India"
+    },
+    "displayHoursAheadOfDb": 0
+  },
+  "cameraOnlineStaleMinutes": 5,
+  "waterflow": {
+    "cameraId": "AEYE_6",
+    "siteName": "Back Door",
+    "dayStartHour": 4,
+    "thresholdAlert": 70,
+    "thresholdAlarm": 110,
+    "thresholdCritical": 150
+  },
+  "walkins": {
+    "sites": [
+      { "siteId": 1, "name": "Biryani Katha" }
+    ],
+    "entrances": [
+      { "cameraId": "Right Entrance", "name": "Main Entrance" }
+    ]
+  },
+  "crowd": {
+    "severityAlarm": 70,
+    "severityCritical": 85,
+    "sites": [
+      { "name": "Biryani Katha" }
+    ],
+    "zones": [
+      { "cameraId": "Overview", "name": "Rear Exterior" }
+    ]
+  }
+}

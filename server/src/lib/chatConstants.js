@@ -1,0 +1,9 @@
+
+const VIOLATION_TYPES = [
+  "WRONG_ROUTE",
+  "NO_HELMET",
+  "TRIPLE_RIDING",
+  "WRONG_PARKING",
+];
+
+module.exports = { VIOLATION_TYPES };

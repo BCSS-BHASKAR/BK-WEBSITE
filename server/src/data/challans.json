@@ -1,0 +1,250 @@
+{
+  "rows": [
+    {
+      "id": 9,
+      "createdAt": "2026-07-23T07:12:14.526Z",
+      "updatedAt": "2026-07-23T07:12:16.301Z",
+      "status": "failed",
+      "sendResult": {
+        "ok": false,
+        "mode": "smtp",
+        "error": "Invalid login: 535-5.7.8 Username and Password not accepted. For more information, go to\n535 5.7.8  https://support.google.com/mail/?p=BadCredentials 5a478bee46e88-3149198adb8sm6986435eec.4 - gsmtp"
+      },
+      "plate": "652XHD",
+      "violationType": "TRIPLE_RIDING",
+      "amount": 1500,
+      "siteName": "Chowking",
+      "cameraId": "AEYE_5",
+      "detectedAt": "2026-07-09 16:13:20",
+      "proofUrl": "/demo/scene_03.jpg",
+      "offenses": [
+        "DRIVING_WITHOUT_LICENSE",
+        "CR_OR_NOT_CARRIED",
+        "DISREGARD_TRAFFIC_SIGN"
+      ],
+      "offenseLabels": [
+        "Driving Without License",
+        "Certificate of Registration / Official Receipt Not Carried",
+        "Disregard Traffic Sign"
+      ],
+      "othersText": null,
+      "accident": "no",
+      "paymentStatus": "unpaid",
+      "penaltyType": "first_offense",
+      "ownerEmail": "devagurunanduri@gmail.com",
+      "ownerName": "Deva",
+      "ownerPhone": "7032674191",
+      "ownerAddress": "Bluecloud softech",
+      "source": "auto",
+      "violationId": 1756
+    },
+    {
+      "id": 8,
+      "createdAt": "2026-07-15T08:59:17.871Z",
+      "updatedAt": "2026-07-15T08:59:20.117Z",
+      "status": "failed",
+      "sendResult": {
+        "ok": false,
+        "mode": "smtp",
+        "error": "Invalid login: 535-5.7.8 Username and Password not accepted. For more information, go to\n535 5.7.8  https://support.google.com/mail/?p=BadCredentials 5a478bee46e88-3118ee6091dsm108966008eec.14 - gsmtp"
+      },
+      "plate": "BYJ1079",
+      "violationType": "NO_HELMET",
+      "amount": 5000,
+      "siteName": "Baliwag",
+      "cameraId": "AEYE_4",
+      "detectedAt": "2026-07-09 17:08:26",
+      "proofUrl": "/demo/scene_02.jpg",
+      "offenses": [
+        "DRIVING_WITHOUT_LICENSE",
+        "OTHERS"
+      ],
+      "offenseLabels": [
+        "Driving Without License",
+        "Others (Specify)"
+      ],
+      "othersText": "bdbadb",
+      "accident": "no",
+      "paymentStatus": "unpaid",
+      "penaltyType": "first_offense",
+      "ownerEmail": "sreenivasulu.yakasiri@bluecloudsoftech.com",
+      "ownerName": "Sreenivasulu Yakasiri",
+      "source": "auto",
+      "violationId": 1763
+    },
+    {
+      "id": 7,
+      "createdAt": "2026-07-13T05:58:33.524Z",
+      "updatedAt": "2026-07-13T05:58:35.787Z",
+      "status": "failed",
+      "sendResult": {
+        "ok": false,
+        "mode": "smtp",
+        "error": "Invalid login: 535-5.7.8 Username and Password not accepted. For more information, go to\n535 5.7.8  https://support.google.com/mail/?p=BadCredentials a92af1059eb24-13b987fc629sm16601247c88.0 - gsmtp"
+      },
+      "plate": "ABC5678",
+      "violationType": "NO_HELMET",
+      "amount": 500,
+      "siteName": "Baliwag",
+      "cameraId": "AEYE_4",
+      "detectedAt": "2026-07-09 18:19:57",
+      "proofUrl": "/demo/scene_04.jpg",
+      "offenses": [
+        "OVERLOADING"
+      ],
+      "offenseLabels": [
+        "Overloading"
+      ],
+      "othersText": null,
+      "accident": "no",
+      "paymentStatus": "unpaid",
+      "penaltyType": "first_offense",
+      "ownerEmail": "sreenivasulu.yakasiri@bluecloudsoftech.com",
+      "ownerName": "Sreenivasulu Yakasiri",
+      "source": "auto",
+      "violationId": 1765
+    },
+    {
+      "id": 6,
+      "createdAt": "2026-06-03T10:34:44.944Z",
+      "updatedAt": "2026-06-03T10:34:55.790Z",
+      "status": "sent",
+      "sendResult": {
+        "ok": true,
+        "mode": "smtp",
+        "messageId": "<5e621474-4dac-c279-0493-35276a506a24@gmail.com>"
+      },
+      "plate": "BCS301",
+      "violationType": "TRIPLE_RIDING",
+      "amount": 1500,
+      "siteName": "Baliwag",
+      "cameraId": "AEYE_4",
+      "detectedAt": "2026-06-01 06:13:45",
+      "proofUrl": "/AEYE_4/20260601/scenes/TRIPLE_RIDING/00000_eb847734-5d3e-11f1-859a-8ea2707ed60a.jpg",
+      "paymentStatus": "unpaid",
+      "penaltyType": "first_offense",
+      "ownerEmail": "shivang.agarwal@bluecloudsoftech.com",
+      "ownerName": "Shivang Agarwal",
+      "source": "auto",
+      "violationId": 3457
+    },
+    {
+      "id": 5,
+      "createdAt": "2026-06-02T11:26:55.028Z",
+      "updatedAt": "2026-06-02T11:27:05.641Z",
+      "status": "sent",
+      "sendResult": {
+        "ok": true,
+        "mode": "smtp",
+        "messageId": "<ad13040d-fcf6-eab1-6a58-97f48440496f@gmail.com>"
+      },
+      "plate": "BCS4001",
+      "violationType": "WRONG_ROUTE",
+      "amount": 750,
+      "siteName": "Chowking",
+      "cameraId": "AEYE_5",
+      "detectedAt": "2026-06-01 06:58:32",
+      "proofUrl": "/AEYE_5/20260601/scenes/WRONG_ROUTE/00006_d22638c6-5d44-11f1-a516-bed70904c21e.jpg",
+      "paymentStatus": "unpaid",
+      "penaltyType": "first_offense",
+      "ownerEmail": "pranathi.r@bluecloudsoftech.com",
+      "ownerName": "Pranathi R",
+      "source": "auto",
+      "violationId": 3469
+    },
+    {
+      "id": 4,
+      "createdAt": "2026-06-02T11:26:02.827Z",
+      "updatedAt": "2026-06-02T11:26:13.180Z",
+      "status": "sent",
+      "sendResult": {
+        "ok": true,
+        "mode": "smtp",
+        "messageId": "<c0ab4fa1-0fe3-38ca-b6e6-d343fcca56d2@gmail.com>"
+      },
+      "plate": "BCS2001",
+      "violationType": "TRIPLE_RIDING",
+      "amount": 1500,
+      "siteName": "Chowking",
+      "cameraId": "AEYE_5",
+      "detectedAt": "2026-06-01 11:52:18",
+      "proofUrl": "/AEYE_5/20260601/scenes/NO_HELMET/00076_a0f6f9f8-5d75-11f1-957f-727b0b2227fd.jpg",
+      "paymentStatus": "unpaid",
+      "penaltyType": "first_offense",
+      "ownerEmail": "vedic.agrawal@bluecloudsoftech.com",
+      "ownerName": "Vedic Agrawal",
+      "source": "auto",
+      "violationId": 3703
+    },
+    {
+      "id": 3,
+      "createdAt": "2026-06-02T11:08:02.010Z",
+      "updatedAt": "2026-06-02T11:08:13.131Z",
+      "status": "sent",
+      "sendResult": {
+        "ok": true,
+        "mode": "smtp",
+        "messageId": "<10bfdee9-b44b-7ab4-5522-8f62f2ff834f@gmail.com>"
+      },
+      "plate": "BCS1001",
+      "violationType": "NO_HELMET",
+      "amount": 500,
+      "siteName": "Luvers",
+      "cameraId": "AEYE_2",
+      "detectedAt": "2026-06-01 05:36:22",
+      "proofUrl": "/AEYE_2/20260601/scenes/NO_HELMET/00000_fa168428-5d38-11f1-b6b5-8ea2707ed60a.jpg",
+      "paymentStatus": "unpaid",
+      "penaltyType": "first_offense",
+      "ownerEmail": "sreenivasulu.yakasiri@bluecloudsoftech.com",
+      "ownerName": "Sreenivasulu Yakasiri",
+      "source": "auto",
+      "violationId": 3450
+    },
+    {
+      "id": 2,
+      "createdAt": "2026-06-02T10:45:23.920Z",
+      "updatedAt": "2026-06-02T10:45:27.637Z",
+      "status": "sent",
+      "sendResult": {
+        "ok": true,
+        "mode": "smtp",
+        "messageId": "<cb9646af-ca61-90e7-cce1-2465c5cc67ed@gmail.com>"
+      },
+      "plate": "BCS3001",
+      "violationType": "WRONG_PARKING",
+      "amount": 1000,
+      "siteName": "Luvers",
+      "cameraId": "AEYE_2",
+      "detectedAt": "2026-06-01 03:48:15",
+      "proofUrl": "/AEYE_2/20260601/scenes/WRONG_PARKING/00002_89f0369c-5d2b-11f1-b6b5-8ea2707ed60a.jpg",
+      "paymentStatus": "overdue",
+      "penaltyType": "first_offense",
+      "ownerEmail": "shivang.agarwal@bluecloudsoftech.com",
+      "ownerName": "Shivang Agarwal",
+      "source": "auto"
+    },
+    {
+      "id": 1,
+      "createdAt": "2026-06-02T10:39:29.125Z",
+      "updatedAt": "2026-06-02T10:39:29.240Z",
+      "status": "sent",
+      "sendResult": {
+        "ok": true,
+        "mode": "demo",
+        "messageId": "demo-1780396769239"
+      },
+      "plate": "BCS3001",
+      "violationType": "WRONG_PARKING",
+      "amount": 1000,
+      "siteName": "Highway",
+      "cameraId": "AEYE_1",
+      "detectedAt": "2026-06-01 02:59:05",
+      "proofUrl": "/AEYE_1/20260601/scenes/WRONG_PARKING/00000_83579554-5d22-11f1-8d26-bed70904c21e.jpg",
+      "paymentStatus": "paid",
+      "penaltyType": "first_offense",
+      "ownerEmail": "shivang.agarwal@bluecloudsoftech.com",
+      "ownerName": "Shivang Agarwal",
+      "source": "auto"
+    }
+  ]
+}

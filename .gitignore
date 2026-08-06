@@ -1,0 +1,81 @@
+# Dependencies & builds
+node_modules/
+dist/
+.venv
+.venv/
+**/.venv
+__pycache__/
+*.py[cod]
+.pytest_cache/
+pytest.ini
+
+# Local dummy/test data stash (never pushed) + the working copies it restores
+_testdata/
+client/public/receiver-results/
+server/ml_retraining/
+/aiserver_anpr_last_3_days.sql
+/*.sql.bak
+
+# Local launcher (also covered by *.sh, listed explicitly per request)
+start_all.sh
+
+# Models & runtime artifacts
+models/
+logs/
+*.log
+*.jsonl
+sent-emails.log
+
+# Secrets
+.env
+.env.*
+!.env.example
+smtp.env
+client/.env.ag
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+
+# Tests & benchmarks
+assistant_ai_service/tests/
+assistant_enhance_service/tests/
+assistant_ai_service/benchmarks/
+assistant_enhance_service/benchmarks/
+**/test_*.py
+**/*_tests.py
+
+# Non-runtime scripts
+scripts/
+server/scripts/
+assistant_ai_service/scripts/
+assistant_enhance_service/scripts/
+*.sh
+
+# Docs & empty deploy
+docs/
+deploy/
+config/README.md
+assistant_ai_service/DEPLOYMENT.md
+assistant_ai_service/SERVICE_FREEZE.md
+assistant_enhance_service/DEPLOYMENT.md
+assistant_enhance_service/SERVICE_FREEZE.md
+assistant_enhance_service/README.md
+assistant_ai_service/README.md
+client/README.md
+
+# Legacy Node chat engine (Python services are used instead)
+server/src/legacy_engine_server.js
+server/src/lib/legacyChatRouter.js
+server/src/lib/legacyEngineProxy.js
+server/src/lib/chat*.js
+!server/src/lib/chatAudit.js
+!server/src/lib/chatConstants.js
+!server/src/lib/chatSecurity.js
+
+# Duplicate systemd units in enhance clone
+assistant_enhance_service/systemd/assistant-ai.service
+assistant_enhance_service/systemd/vllm-assistant-ai.service
+scratch*.py
+**/scratch*.py

@@ -1,0 +1,12 @@
+<svg width="400" height="120" viewBox="0 0 400 120" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <style>
+      .text { font-family: system-ui, -apple-system, sans-serif; font-weight: 800; font-size: 46px; fill: white; letter-spacing: 0.02em; }
+      .tm { font-family: system-ui, -apple-system, sans-serif; font-weight: 800; font-size: 16px; fill: white; }
+    </style>
+  </defs>
+  <polygon points="0,0 260,0 160,120 0,120" fill="#F87A24" />
+  <polygon points="260,0 400,0 400,120 160,120" fill="#256BAE" />
+  <text x="24" y="80" class="text">ACCESS GENIE</text>
+  <text x="360" y="48" class="tm">TM</text>
+</svg>

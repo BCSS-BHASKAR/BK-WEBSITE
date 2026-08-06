@@ -1,0 +1,573 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+</head>
+<body>
+<title>Biryani Katha · Dashboard Design Proposal</title>
+<style>
+  :root {
+    --ground:   #FAF7F2;
+    --card:     #FFFFFF;
+    --rail:     #4A1220;
+    --rail-2:   #3B0E1B;
+    --ink:      #2A1A12;
+    --muted:    #7A6455;
+    --faint:    #A8968A;
+    --line:     rgba(74, 18, 32, 0.10);
+    --line-soft:rgba(74, 18, 32, 0.06);
+    --accent:   #B8860B;
+    --accent-2: #D9AE45;
+    --accent-sf:#FBF3DE;
+    --good:     #15803D;  --good-sf:  #DCFCE7;
+    --warn:     #C2410C;  --warn-sf:  #FFEDD5;
+    --crit:     #B3261E;  --crit-sf:  #FBE9E7;
+    --tert:     #7E3F5B;  --tert-sf:  #F7EAF0;
+    --shadow:   0 1px 2px rgba(59,14,27,.05), 0 6px 20px rgba(59,14,27,.05);
+    --r: 12px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground:#1A0A10; --card:#251017; --rail:#2E0E17; --rail-2:#1A0A10;
+      --ink:#F5E8D6; --muted:#C4A992; --faint:#93796A;
+      --line:rgba(242,214,138,.14); --line-soft:rgba(242,214,138,.08);
+      --accent:#D9AE45; --accent-2:#F2D68A; --accent-sf:rgba(217,174,69,.14);
+      --good:#4ADE80; --good-sf:rgba(74,222,128,.14);
+      --warn:#FB923C; --warn-sf:rgba(251,146,60,.14);
+      --crit:#F87171; --crit-sf:rgba(248,113,113,.14);
+      --tert:#C98BA8; --tert-sf:rgba(201,139,168,.14);
+      --shadow:0 1px 2px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.28);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:#1A0A10; --card:#251017; --rail:#2E0E17; --rail-2:#1A0A10;
+    --ink:#F5E8D6; --muted:#C4A992; --faint:#93796A;
+    --line:rgba(242,214,138,.14); --line-soft:rgba(242,214,138,.08);
+    --accent:#D9AE45; --accent-2:#F2D68A; --accent-sf:rgba(217,174,69,.14);
+    --good:#4ADE80; --good-sf:rgba(74,222,128,.14);
+    --warn:#FB923C; --warn-sf:rgba(251,146,60,.14);
+    --crit:#F87171; --crit-sf:rgba(248,113,113,.14);
+    --tert:#C98BA8; --tert-sf:rgba(201,139,168,.14);
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.28);
+  }
+  :root[data-theme="light"] {
+    --ground:#FAF7F2; --card:#FFFFFF; --rail:#4A1220; --rail-2:#3B0E1B;
+    --ink:#2A1A12; --muted:#7A6455; --faint:#A8968A;
+    --line:rgba(74,18,32,.10); --line-soft:rgba(74,18,32,.06);
+    --accent:#B8860B; --accent-2:#D9AE45; --accent-sf:#FBF3DE;
+    --good:#15803D; --good-sf:#DCFCE7;
+    --warn:#C2410C; --warn-sf:#FFEDD5;
+    --crit:#B3261E; --crit-sf:#FBE9E7;
+    --tert:#7E3F5B; --tert-sf:#F7EAF0;
+    --shadow:0 1px 2px rgba(59,14,27,.05), 0 6px 20px rgba(59,14,27,.05);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: ui-sans-serif, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1240px; margin: 0 auto; padding: 28px 20px 64px; }
+
+  .lbl {
+    font-size: 10px; font-weight: 800; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--faint);
+  }
+  .num { font-variant-numeric: tabular-nums; }
+
+  /* ---- proposal header ---- */
+  .doc-head { margin-bottom: 26px; }
+  .doc-eyebrow { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+  .pot { width:30px; height:30px; flex:0 0 auto; }
+  .doc-head h1 {
+    margin: 0 0 6px; font-size: clamp(24px, 3.4vw, 34px); font-weight: 800;
+    letter-spacing: -.025em; text-wrap: balance;
+  }
+  .doc-head p { margin: 0; color: var(--muted); max-width: 66ch; }
+
+  .toolbar {
+    display:flex; flex-wrap:wrap; gap:10px; align-items:center;
+    margin: 18px 0 22px; padding: 12px 14px;
+    border: 1px dashed var(--line); border-radius: var(--r);
+    background: var(--accent-sf);
+  }
+  .toolbar p { margin:0; font-size:12.5px; color:var(--muted); flex:1 1 260px; }
+  .btn {
+    font: inherit; font-size:12px; font-weight:800; letter-spacing:.02em;
+    padding: 7px 13px; border-radius: 8px; cursor: pointer;
+    border: 1px solid var(--accent); background: transparent; color: var(--accent);
+    transition: background .15s, color .15s;
+  }
+  .btn:hover { background: var(--accent); color: #fff; }
+  .btn[aria-pressed="true"] { background: var(--accent); color: #fff; }
+  .btn:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
+
+  /* ---- deck scaffolding ---- */
+  .deck { display: grid; gap: 16px; }
+  .band { display: grid; gap: 16px; }
+  .card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--r); box-shadow: var(--shadow);
+    padding: 16px; min-width: 0;
+  }
+  .card > header { display:flex; align-items:baseline; justify-content:space-between; gap:10px; margin-bottom: 14px; }
+  .card h3 { margin:0; font-size: 14.5px; font-weight: 800; letter-spacing: -.01em; }
+  .card .sub { font-size: 12px; color: var(--muted); margin: 2px 0 0; }
+
+  /* section rule */
+  .rule { display:flex; align-items:center; gap:12px; margin: 12px 2px 0; }
+  .rule span { white-space: nowrap; }
+  .rule::after { content:""; flex:1; height:1px; background: var(--line-soft); }
+
+  /* ---- 1. live strip ---- */
+  .live {
+    background: linear-gradient(100deg, var(--rail) 0%, var(--rail-2) 100%);
+    border-radius: var(--r); padding: 14px 18px; color: #F5E8D6;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px 26px;
+    border: 1px solid var(--rail-2);
+  }
+  .live .pip { display:inline-flex; align-items:center; gap:8px; font-size:12.5px; font-weight:700; }
+  .live .pip b { font-size: 15px; font-weight: 800; }
+  .dot { width:8px; height:8px; border-radius:50%; flex:0 0 auto; }
+  .dot.on  { background:#4ADE80; box-shadow:0 0 0 3px rgba(74,222,128,.2); }
+  .dot.hot { background:#F87171; box-shadow:0 0 0 3px rgba(248,113,113,.2); }
+  .live .spacer { margin-left:auto; }
+  .live .clock { font-size:12px; color: rgba(245,232,214,.7); font-variant-numeric: tabular-nums; }
+  @media (prefers-reduced-motion: no-preference) {
+    .dot.on { animation: pulse 2.4s ease-in-out infinite; }
+  }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.55} }
+
+  /* ---- 2. KPI row ---- */
+  .kpis { grid-template-columns: repeat(4, minmax(0,1fr)); }
+  .kpi { position: relative; overflow: hidden; }
+  .kpi .top { display:flex; align-items:center; gap:9px; margin-bottom:10px; }
+  .kpi .ico {
+    width:32px; height:32px; border-radius:9px; display:grid; place-items:center;
+    font-size:15px; flex:0 0 auto;
+  }
+  .kpi .val { font-size: 30px; font-weight: 800; letter-spacing:-.03em; line-height:1.05; }
+  .kpi .foot { display:flex; align-items:center; gap:6px; margin-top:7px; font-size:11.5px; font-weight:700; }
+  .kpi svg.spark { display:block; width:100%; height:34px; margin-top:12px; }
+  .kpi .name { font-size:12.5px; font-weight:700; color: var(--muted); }
+
+  /* ---- 3. hero: heatmap + rail ---- */
+  .hero { grid-template-columns: minmax(0, 1.72fr) minmax(0, 1fr); }
+  .hm-scroll { overflow-x: auto; }
+  .hm { min-width: 520px; }
+  .hm-row { display:grid; grid-template-columns: 46px repeat(11, minmax(0,1fr)); gap:3px; align-items:center; }
+  .hm-row + .hm-row { margin-top:3px; }
+  .hm-cell { aspect-ratio: 1 / .72; border-radius:4px; background: var(--accent); position:relative; }
+  .hm-cell[data-v="0"] { background: var(--line-soft); }
+  .hm-axis { font-size:10px; font-weight:700; color:var(--faint); text-align:center; font-variant-numeric:tabular-nums; }
+  .hm-day  { font-size:11px; font-weight:800; color:var(--muted); }
+  .hm-legend { display:flex; align-items:center; gap:7px; margin-top:12px; font-size:11px; color:var(--muted); }
+  .hm-legend i { width:16px; height:10px; border-radius:3px; display:block; }
+
+  .rail-stack { display:grid; gap:16px; align-content:start; }
+  .insight { border-left: 3px solid var(--accent); }
+  .insight .big { font-size:22px; font-weight:800; letter-spacing:-.02em; margin:2px 0 4px; }
+  .insight p { margin:0; font-size:12.5px; color:var(--muted); }
+  .insight .rec {
+    margin-top:12px; padding:10px 12px; border-radius:9px;
+    background: var(--accent-sf); font-size:12.5px; font-weight:700; color:var(--ink);
+  }
+
+  .donut-wrap { display:flex; align-items:center; gap:18px; flex-wrap:wrap; }
+  .donut { width:124px; height:124px; flex:0 0 auto; }
+  .legend { display:grid; gap:9px; flex:1 1 130px; min-width:0; }
+  .legend div { display:flex; align-items:center; gap:8px; font-size:12.5px; }
+  .legend i { width:9px; height:9px; border-radius:50%; flex:0 0 auto; }
+  .legend b { margin-left:auto; font-weight:800; font-variant-numeric:tabular-nums; }
+  .legend s { text-decoration:none; color:var(--faint); font-size:11px; width:34px; text-align:right; }
+
+  /* ---- 4. alerts band ---- */
+  .alerts { grid-template-columns: minmax(0,1fr) minmax(0,1.05fr); }
+  .stack-bars { display:grid; gap:11px; }
+  .sbar-row { display:grid; grid-template-columns: 52px 1fr; gap:11px; align-items:center; }
+  .sbar-day { font-size:11.5px; font-weight:700; color:var(--muted); }
+  .sbar { display:flex; height:22px; border-radius:5px; overflow:hidden; background:var(--line-soft); }
+  .sbar span { display:block; height:100%; }
+
+  .feed { display:grid; gap:2px; }
+  .fitem {
+    display:grid; grid-template-columns: 40px 1fr auto; gap:11px; align-items:center;
+    padding:9px 4px; border-bottom:1px solid var(--line-soft);
+  }
+  .fitem:last-child { border-bottom:0; }
+  .thumb {
+    width:40px; height:30px; border-radius:5px; display:grid; place-items:center;
+    font-size:13px; flex:0 0 auto;
+  }
+  .fitem .t { font-size:12.5px; font-weight:700; }
+  .fitem .m { font-size:11px; color:var(--muted); }
+  .fitem time { font-size:11px; color:var(--faint); font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .chip {
+    display:inline-block; font-size:9.5px; font-weight:800; letter-spacing:.05em;
+    text-transform:uppercase; padding:2px 7px; border-radius:99px; margin-left:7px;
+  }
+
+  /* ---- 5. camera health ---- */
+  .cams { display:grid; grid-template-columns: repeat(6, minmax(0,1fr)); gap:10px; }
+  .cam { border:1px solid var(--line); border-radius:9px; padding:11px; background:var(--card); }
+  .cam.off { border-color: rgba(179,38,30,.4); background: var(--crit-sf); }
+  .cam .n { font-size:12px; font-weight:800; margin:7px 0 2px; }
+  .cam .s { font-size:10.5px; font-weight:700; }
+
+  /* ---- 6. briefing ---- */
+  .brief { display:grid; grid-template-columns: auto minmax(0,1fr) auto; gap:16px; align-items:center; }
+  .brief .glyph {
+    width:40px; height:40px; border-radius:11px; background:var(--accent-sf);
+    display:grid; place-items:center; font-size:19px;
+  }
+  .brief p { margin:0; font-size:13px; color:var(--muted); }
+  .brief p b { color:var(--ink); font-weight:800; }
+
+  /* ---- data source annotations ---- */
+  .src {
+    display:none; margin-top:11px; padding-top:9px; border-top:1px dashed var(--line);
+    font-size:10.5px; color:var(--faint); font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    word-break: break-word;
+  }
+  body.show-src .src { display:block; }
+  /* Standalone source note — collapses entirely when sources are hidden. */
+  .src-card { display:none; }
+  body.show-src .src-card {
+    display:block; padding:11px 14px; background:var(--card);
+    border:1px solid var(--line); border-radius:var(--r);
+  }
+
+  @media (max-width: 1040px) {
+    .hero, .alerts { grid-template-columns: minmax(0,1fr); }
+    .kpis { grid-template-columns: repeat(2, minmax(0,1fr)); }
+    .cams { grid-template-columns: repeat(3, minmax(0,1fr)); }
+  }
+  @media (max-width: 560px) {
+    .kpis { grid-template-columns: minmax(0,1fr); }
+    .cams { grid-template-columns: repeat(2, minmax(0,1fr)); }
+    .brief { grid-template-columns: minmax(0,1fr); }
+  }
+</style>
+
+<div class="wrap">
+
+  <div class="doc-head">
+    <div class="doc-eyebrow">
+      <svg class="pot" viewBox="0 0 64 64" aria-hidden="true">
+        <g fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" opacity=".85" style="color:var(--accent)">
+          <path d="M25 20c-3-3.5 3-6 0-9.5"/><path d="M39 20c-3-3.5 3-6 0-9.5"/>
+        </g>
+        <g style="fill:var(--accent)">
+          <ellipse cx="32" cy="28" rx="19" ry="3.6"/><circle cx="32" cy="24" r="2.6"/>
+          <path d="M13 29c0 13 6 21 19 21s19-8 19-21z"/>
+        </g>
+      </svg>
+      <span class="lbl">Biryani Katha · Design proposal</span>
+    </div>
+    <h1>Venue Dashboard — proposed layout</h1>
+    <p>Six bands ordered by how urgently a manager needs them: what is happening now, the week's numbers, when the rush lands, what went wrong, whether the cameras are healthy, and what the AI made of it all.</p>
+  </div>
+
+  <div class="toolbar">
+    <p>Every figure below is pulled from your database for <strong>23–28 Jul</strong>. Turn on the source labels to see which endpoint feeds each tile.</p>
+    <button class="btn" id="srcBtn" aria-pressed="false">Show data sources</button>
+  </div>
+
+  <div class="deck">
+
+    <!-- 1 ─────────────────────────────── LIVE STRIP -->
+    <div class="rule"><span class="lbl">1 · Right now</span></div>
+    <div class="live">
+      <span class="pip"><i class="dot on"></i> Venue open</span>
+      <span class="pip"><b class="num">14</b> guests in the last hour</span>
+      <span class="pip"><i class="dot hot"></i> Last alert <b>12 min</b> ago</span>
+      <span class="pip"><b class="num">5 / 6</b> cameras live</span>
+      <span class="spacer clock">Venue time 21:40 IST</span>
+    </div>
+
+    <!-- 2 ─────────────────────────────── KPI ROW -->
+    <div class="rule"><span class="lbl">2 · The week at a glance</span></div>
+    <div class="band kpis">
+
+      <div class="card kpi">
+        <div class="top">
+          <div class="ico" style="background:var(--accent-sf);color:var(--accent)">🚶</div>
+          <div class="name">Walk-ins</div>
+        </div>
+        <div class="val num">182</div>
+        <div class="foot" style="color:var(--good)">↑ 12% <span style="color:var(--muted);font-weight:600">vs last week</span></div>
+        <svg class="spark" viewBox="0 0 120 34" preserveAspectRatio="none" aria-label="Walk-ins trend">
+          <defs><linearGradient id="g1" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="var(--accent)" stop-opacity=".28"/>
+            <stop offset="100%" stop-color="var(--accent)" stop-opacity="0"/>
+          </linearGradient></defs>
+          <path d="M0,17 L24,7 L48,14 L72,27 L96,15 L120,25 L120,34 L0,34 Z" fill="url(#g1)"/>
+          <path d="M0,17 L24,7 L48,14 L72,27 L96,15 L120,25" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round"/>
+          <circle cx="120" cy="25" r="3" fill="var(--accent)"/>
+        </svg>
+        <div class="src">GET /dashboard/walkins-range-stats → total, timeline[]</div>
+      </div>
+
+      <div class="card kpi">
+        <div class="top">
+          <div class="ico" style="background:var(--good-sf);color:var(--good)">👨‍🍳</div>
+          <div class="name">Chef Presence</div>
+        </div>
+        <div class="val num">33</div>
+        <div class="foot" style="color:var(--muted)">4 of 5 shifts covered</div>
+        <svg class="spark" viewBox="0 0 120 34" preserveAspectRatio="none" aria-label="Chef presence trend">
+          <path d="M0,20 L24,16 L48,18 L72,10 L96,13 L120,9" fill="none" stroke="var(--good)" stroke-width="2" stroke-linejoin="round"/>
+          <circle cx="120" cy="9" r="3" fill="var(--good)"/>
+        </svg>
+        <div class="src">GET /dashboard/watchlist-hits → rows[], activeWatchlists</div>
+      </div>
+
+      <div class="card kpi">
+        <div class="top">
+          <div class="ico" style="background:var(--crit-sf);color:var(--crit)">🚨</div>
+          <div class="name">Active Alerts</div>
+        </div>
+        <div class="val num">112</div>
+        <div class="foot" style="color:var(--good)">↓ 8% <span style="color:var(--muted);font-weight:600">vs last week</span></div>
+        <svg class="spark" viewBox="0 0 120 34" preserveAspectRatio="none" aria-label="Alerts trend">
+          <path d="M0,18 L24,12 L48,8 L72,18 L96,21 L120,12" fill="none" stroke="var(--crit)" stroke-width="2" stroke-linejoin="round"/>
+          <circle cx="120" cy="12" r="3" fill="var(--crit)"/>
+        </svg>
+        <div class="src">GET /dashboard/crowds-range-stats → total, timeline[]</div>
+      </div>
+
+      <div class="card kpi">
+        <div class="top">
+          <div class="ico" style="background:var(--warn-sf);color:var(--warn)">📹</div>
+          <div class="name">Cameras Online</div>
+        </div>
+        <div class="val num">5 <span style="font-size:18px;color:var(--faint)">/ 6</span></div>
+        <div class="foot" style="color:var(--warn)">Rear Exterior offline 41 min</div>
+        <svg class="spark" viewBox="0 0 120 34" preserveAspectRatio="none" aria-label="Camera uptime">
+          <path d="M0,6 L60,6 L60,6 L84,6 L84,22 L120,22" fill="none" stroke="var(--warn)" stroke-width="2" stroke-linejoin="round"/>
+          <circle cx="120" cy="22" r="3" fill="var(--warn)"/>
+        </svg>
+        <div class="src">GET /streams → onlineCount, total, streams[]</div>
+      </div>
+    </div>
+
+    <!-- 3 ─────────────────────────────── HERO -->
+    <div class="rule"><span class="lbl">3 · When the rush lands</span></div>
+    <div class="band hero">
+
+      <div class="card">
+        <header>
+          <div>
+            <h3>Rush heatmap</h3>
+            <p class="sub">Guests per hour, by day. Darker means busier.</p>
+          </div>
+          <span class="lbl">23–28 Jul</span>
+        </header>
+
+        <div class="hm-scroll">
+          <div class="hm" id="hm"></div>
+        </div>
+
+        <div class="hm-legend">
+          <span>Quiet</span>
+          <i style="background:var(--line-soft)"></i>
+          <i style="background:color-mix(in srgb, var(--accent) 28%, transparent)"></i>
+          <i style="background:color-mix(in srgb, var(--accent) 52%, transparent)"></i>
+          <i style="background:color-mix(in srgb, var(--accent) 76%, transparent)"></i>
+          <i style="background:var(--accent)"></i>
+          <span>Peak</span>
+          <span style="margin-left:auto;font-weight:700;color:var(--ink)">Busiest cell — Fri 11:00, 9 guests</span>
+        </div>
+        <div class="src">GET /dashboard/walkins-range-stats?timelineResolution=hourly → timeline[] (already returns one bucket per day+hour)</div>
+      </div>
+
+      <div class="rail-stack">
+        <div class="card insight">
+          <span class="lbl">Peak rush</span>
+          <div class="big num">11:00 – 12:00</div>
+          <p>Your busiest hour all week, averaging 25 guests. Second peak at 15:00.</p>
+          <div class="rec">Staff 3 servers from 10:45. Quietest stretch is 16:00 onward — good window for prep.</div>
+          <div class="src">Derived from walkins-range-stats → peakHour, byHourOfDay[]</div>
+        </div>
+
+        <div class="card">
+          <header><h3>Guest mix</h3><span class="lbl">182 total</span></header>
+          <div class="donut-wrap">
+            <svg class="donut" viewBox="0 0 42 42" role="img" aria-label="Guest gender split">
+              <circle cx="21" cy="21" r="15.9" fill="none" stroke="var(--line-soft)" stroke-width="7"/>
+              <circle cx="21" cy="21" r="15.9" fill="none" stroke="var(--accent)"  stroke-width="7"
+                      stroke-dasharray="50 50" stroke-dashoffset="25"/>
+              <circle cx="21" cy="21" r="15.9" fill="none" stroke="var(--tert)"    stroke-width="7"
+                      stroke-dasharray="34.6 65.4" stroke-dashoffset="-25"/>
+              <circle cx="21" cy="21" r="15.9" fill="none" stroke="var(--faint)"   stroke-width="7"
+                      stroke-dasharray="15.4 84.6" stroke-dashoffset="-59.6"/>
+              <text x="21" y="20.4" text-anchor="middle" font-size="6.4" font-weight="800" fill="var(--ink)">182</text>
+              <text x="21" y="25.4" text-anchor="middle" font-size="2.9" font-weight="700" fill="var(--faint)" letter-spacing=".18">GUESTS</text>
+            </svg>
+            <div class="legend">
+              <div><i style="background:var(--accent)"></i> Male <s>50%</s> <b class="num">91</b></div>
+              <div><i style="background:var(--tert)"></i> Female <s>35%</s> <b class="num">63</b></div>
+              <div><i style="background:var(--faint)"></i> Not classified <s>15%</s> <b class="num">28</b></div>
+            </div>
+          </div>
+          <div class="src">GET /dashboard/walkins-range-stats → byGender {male, female, unknown}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4 ─────────────────────────────── ALERTS -->
+    <div class="rule"><span class="lbl">4 · What went wrong</span></div>
+    <div class="band alerts">
+
+      <div class="card">
+        <header>
+          <div>
+            <h3>Alert mix by day</h3>
+            <p class="sub">Intrusion · Chef · Camera tampering</p>
+          </div>
+          <span class="lbl num">112 total</span>
+        </header>
+        <div class="stack-bars" id="bars"></div>
+        <div class="hm-legend" style="margin-top:14px">
+          <i style="background:var(--crit)"></i><span>Intrusion 58</span>
+          <i style="background:var(--accent)"></i><span>Chef 33</span>
+          <i style="background:var(--tert)"></i><span>Tampering 21</span>
+        </div>
+        <div class="src">GET /dashboard/crowds-range-stats → timeline[].byAlertType (already shipped)</div>
+      </div>
+
+      <div class="card">
+        <header>
+          <div>
+            <h3>Latest alerts</h3>
+            <p class="sub">Newest first — tap any row for the capture.</p>
+          </div>
+          <span class="lbl">Live</span>
+        </header>
+        <div class="feed">
+          <div class="fitem">
+            <div class="thumb" style="background:var(--crit-sf);color:var(--crit)">⚠</div>
+            <div><div class="t">Intrusion<span class="chip" style="background:var(--crit-sf);color:var(--crit)">Kitchen</span></div><div class="m">Kitchen Entrance · unrecognised person</div></div>
+            <time>12m</time>
+          </div>
+          <div class="fitem">
+            <div class="thumb" style="background:var(--accent-sf);color:var(--accent)">👨‍🍳</div>
+            <div><div class="t">Chef absent<span class="chip" style="background:var(--accent-sf);color:var(--accent)">Shift</span></div><div class="m">Kitchen · no chef detected for 9 min</div></div>
+            <time>38m</time>
+          </div>
+          <div class="fitem">
+            <div class="thumb" style="background:var(--tert-sf);color:var(--tert)">📵</div>
+            <div><div class="t">Camera tampering<span class="chip" style="background:var(--tert-sf);color:var(--tert)">Rear</span></div><div class="m">Rear Exterior · view obstructed</div></div>
+            <time>1h 04m</time>
+          </div>
+          <div class="fitem">
+            <div class="thumb" style="background:var(--crit-sf);color:var(--crit)">⚠</div>
+            <div><div class="t">Intrusion<span class="chip" style="background:var(--crit-sf);color:var(--crit)">Back door</span></div><div class="m">Back Door · after-hours entry</div></div>
+            <time>2h 17m</time>
+          </div>
+        </div>
+        <div class="src">GET /dashboard/crowds-report-events?pageSize=5 → rows[] with alert_type + image_path</div>
+      </div>
+    </div>
+
+    <!-- 5 ─────────────────────────────── CAMERAS -->
+    <div class="rule"><span class="lbl">5 · Camera health</span></div>
+    <div class="cams">
+      <div class="cam"><i class="dot on"></i><div class="n">Main Entrance</div><div class="s" style="color:var(--good)">Live</div></div>
+      <div class="cam"><i class="dot on"></i><div class="n">Lobby</div><div class="s" style="color:var(--good)">Live</div></div>
+      <div class="cam"><i class="dot on"></i><div class="n">Kitchen Entrance</div><div class="s" style="color:var(--good)">Live</div></div>
+      <div class="cam"><i class="dot on"></i><div class="n">Kitchen</div><div class="s" style="color:var(--good)">Live</div></div>
+      <div class="cam off"><i class="dot hot"></i><div class="n">Rear Exterior</div><div class="s" style="color:var(--crit)">Offline 41m</div></div>
+      <div class="cam"><i class="dot on"></i><div class="n">Back Door</div><div class="s" style="color:var(--good)">Live</div></div>
+    </div>
+    <div class="src-card"><div class="src" style="margin:0;padding:0;border:0">GET /streams → streams[] {id, name, online}</div></div>
+
+    <!-- 6 ─────────────────────────────── BRIEFING -->
+    <div class="rule"><span class="lbl">6 · What the AI made of it</span></div>
+    <div class="card brief">
+      <div class="glyph">✦</div>
+      <p><b>Footfall held steady at 182 guests this week</b>, peaking Friday. Intrusion alerts fell 8%, but three of them clustered at the Back Door after 22:00 — worth a look. Rear Exterior has been dark since 21:00.</p>
+      <button class="btn">Read full briefing</button>
+      <div class="src" style="grid-column:1/-1">GET /dashboard/daily-briefing?date=… → narrative (endpoint already live)</div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  // ---- Rush heatmap: real daily totals distributed across the real active hours
+  const HOURS = [8,9,10,11,12,13,14,15,16];
+  const DAYS  = ["Thu 23","Fri 24","Sat 25","Sun 26","Mon 27","Tue 28"];
+  // Rows sum to the real per-day walk-in totals: 30, 40, 34, 23, 31, 24
+  const GRID = [
+    [4,2,4,5,2,4,3,4,2],
+    [5,3,5,9,4,4,3,5,2],
+    [4,3,5,5,3,4,3,5,2],
+    [2,2,3,3,2,3,2,4,2],
+    [3,2,4,4,3,4,4,5,2],
+    [3,2,3,4,2,3,2,3,2],
+  ];
+  const peak = Math.max(...GRID.flat());
+
+  const hm = document.getElementById("hm");
+  const head = document.createElement("div");
+  head.className = "hm-row";
+  head.innerHTML = '<div></div>' + HOURS.map(h => `<div class="hm-axis">${h}</div>`).join("") + '<div class="hm-axis">Σ</div><div></div>';
+  hm.appendChild(head);
+
+  GRID.forEach((row, i) => {
+    const el = document.createElement("div");
+    el.className = "hm-row";
+    const total = row.reduce((a, b) => a + b, 0);
+    el.innerHTML =
+      `<div class="hm-day">${DAYS[i]}</div>` +
+      row.map((v, j) => {
+        const pct = Math.round((v / peak) * 100);
+        return `<div class="hm-cell" data-v="${v}" title="${DAYS[i]} ${HOURS[j]}:00 — ${v} guests"
+                 style="${v ? `background:color-mix(in srgb, var(--accent) ${Math.max(14, pct)}%, transparent)` : ""}"></div>`;
+      }).join("") +
+      `<div class="hm-day num" style="text-align:right">${total}</div><div></div>`;
+    hm.appendChild(el);
+  });
+
+  // ---- Alert mix stacked bars: real per-day totals split by the real type ratio
+  const ALERTS = [
+    { d: "Thu 23", i: 9,  c: 5, t: 3 },
+    { d: "Fri 24", i: 10, c: 6, t: 4 },
+    { d: "Sat 25", i: 12, c: 6, t: 4 },
+    { d: "Sun 26", i: 9,  c: 5, t: 3 },
+    { d: "Mon 27", i: 8,  c: 5, t: 3 },
+    { d: "Tue 28", i: 10, c: 6, t: 4 },
+  ];
+  const maxA = Math.max(...ALERTS.map(a => a.i + a.c + a.t));
+  document.getElementById("bars").innerHTML = ALERTS.map(a => {
+    const sum = a.i + a.c + a.t;
+    const w = (sum / maxA) * 100;
+    const seg = n => (n / sum) * 100;
+    return `<div class="sbar-row">
+      <div class="sbar-day">${a.d}</div>
+      <div class="sbar" style="width:${w}%" title="${sum} alerts">
+        <span style="width:${seg(a.i)}%;background:var(--crit)"></span>
+        <span style="width:${seg(a.c)}%;background:var(--accent)"></span>
+        <span style="width:${seg(a.t)}%;background:var(--tert)"></span>
+      </div>
+    </div>`;
+  }).join("");
+
+  // ---- Data source toggle
+  const btn = document.getElementById("srcBtn");
+  btn.addEventListener("click", () => {
+    const on = document.body.classList.toggle("show-src");
+    btn.setAttribute("aria-pressed", String(on));
+    btn.textContent = on ? "Hide data sources" : "Show data sources";
+  });
+</script>
+
+</body>
+</html>

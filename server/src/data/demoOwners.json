@@ -1,0 +1,32 @@
+{
+  "owners": [
+    {
+      "email": "sreenivasulu.yakasiri@bluecloudsoftech.com",
+      "name": "Sreenivasulu Yakasiri",
+      "phone": "0908 234 5678",
+      "address": "BlueCloud Softech, Hyderabad",
+      "vehicles": ["BCS1001", "BCS1002", "BCS1003"]
+    },
+    {
+      "email": "vedic.agrawal@bluecloudsoftech.com",
+      "name": "Vedic Agrawal",
+      "phone": "0917 111 2233",
+      "address": "BlueCloud Softech, Noida",
+      "vehicles": ["BCS2001", "BCS2002"]
+    },
+    {
+      "email": "shivang.agarwal@bluecloudsoftech.com",
+      "name": "Shivang Agarwal",
+      "phone": "0920 555 7788",
+      "address": "BlueCloud Softech, Gurgaon",
+      "vehicles": ["BCS3001", "BCS3002", "BCS3003"]
+    },
+    {
+      "email": "pranathi.r@bluecloudsoftech.com",
+      "name": "Pranathi R",
+      "phone": "0998 700 1122",
+      "address": "BlueCloud Softech, Bangalore",
+      "vehicles": ["BCS4001", "BCS4002"]
+    }
+  ]
+}

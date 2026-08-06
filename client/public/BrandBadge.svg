@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 276" width="200" height="276" role="img" aria-label="Biryani Katha">
+  <defs>
+    <linearGradient id="bkGold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#F2D68A"/>
+      <stop offset="45%" stop-color="#D9AE45"/>
+      <stop offset="100%" stop-color="#B8862A"/>
+    </linearGradient>
+    <linearGradient id="bkPot" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#E8C56A"/>
+      <stop offset="100%" stop-color="#C0902F"/>
+    </linearGradient>
+    <radialGradient id="bkInner" cx="50%" cy="38%" r="68%">
+      <stop offset="0%" stop-color="#6B1B2C"/>
+      <stop offset="100%" stop-color="#3B0E1B"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Emblem -->
+  <g>
+    <circle cx="100" cy="94" r="76" fill="url(#bkInner)"/>
+    <circle cx="100" cy="94" r="76" fill="none" stroke="url(#bkGold)" stroke-width="4"/>
+    <circle cx="100" cy="94" r="66" fill="none" stroke="url(#bkGold)" stroke-width="1.5" opacity="0.65"/>
+
+    <!-- Steam -->
+    <g fill="none" stroke="#F2D68A" stroke-width="3.4" stroke-linecap="round" opacity="0.9">
+      <path d="M82 60c-5-6 5-10 0-16"/>
+      <path d="M100 55c-5.5-6.5 5.5-11 0-17.5"/>
+      <path d="M118 60c-5-6 5-10 0-16"/>
+    </g>
+
+    <!-- Handi (pot) -->
+    <g>
+      <!-- lid -->
+      <ellipse cx="100" cy="82" rx="42" ry="7" fill="url(#bkPot)"/>
+      <circle cx="100" cy="75" r="5" fill="url(#bkPot)"/>
+      <!-- body -->
+      <path d="M62 84c0 26 12 42 38 42s38-16 38-42z" fill="url(#bkPot)"/>
+      <!-- handles -->
+      <path d="M62 92c-9 0-13 5-13 10s4 9 11 9" fill="none" stroke="url(#bkPot)" stroke-width="5" stroke-linecap="round"/>
+      <path d="M138 92c9 0 13 5 13 10s-4 9-11 9" fill="none" stroke="url(#bkPot)" stroke-width="5" stroke-linecap="round"/>
+      <!-- rice band -->
+      <path d="M70 104h60" stroke="#3B0E1B" stroke-width="3" stroke-linecap="round" opacity="0.5"/>
+    </g>
+
+    <!-- Base rule -->
+    <path d="M64 140h72" stroke="url(#bkGold)" stroke-width="2.5" stroke-linecap="round"/>
+  </g>
+
+  <!-- Wordmark -->
+  <g font-family="Inter, 'Segoe UI', system-ui, sans-serif" text-anchor="middle">
+    <text x="100" y="208" font-size="30" font-weight="800" letter-spacing="1.5" fill="url(#bkGold)">BIRYANI</text>
+    <text x="100" y="243" font-size="30" font-weight="800" letter-spacing="1.5" fill="url(#bkGold)">KATHA</text>
+    <!-- <text x="100" y="266" font-size="10.5" font-weight="600" letter-spacing="4.5" fill="#E6C98A" opacity="0.85">SINCE THE FIRST DUM</text> -->
+  </g>
+</svg>

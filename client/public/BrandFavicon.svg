@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Biryani Katha">
+  <defs>
+    <linearGradient id="fGold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#F2D68A"/>
+      <stop offset="100%" stop-color="#BE8C2C"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="#4A1220"/>
+  <g fill="none" stroke="#F2D68A" stroke-width="2.4" stroke-linecap="round" opacity="0.9">
+    <path d="M25 20c-3-3.5 3-6 0-9.5"/>
+    <path d="M39 20c-3-3.5 3-6 0-9.5"/>
+  </g>
+  <ellipse cx="32" cy="28" rx="19" ry="3.6" fill="url(#fGold)"/>
+  <circle cx="32" cy="24" r="2.6" fill="url(#fGold)"/>
+  <path d="M13 29c0 13 6 21 19 21s19-8 19-21z" fill="url(#fGold)"/>
+  <path d="M13 33c-4.5 0-6.5 2.5-6.5 5s2 4.5 5.5 4.5" fill="none" stroke="url(#fGold)" stroke-width="3" stroke-linecap="round"/>
+  <path d="M51 33c4.5 0 6.5 2.5 6.5 5s-2 4.5-5.5 4.5" fill="none" stroke="url(#fGold)" stroke-width="3" stroke-linecap="round"/>
+  <path d="M18 39h28" stroke="#4A1220" stroke-width="2.4" stroke-linecap="round" opacity="0.55"/>
+</svg>

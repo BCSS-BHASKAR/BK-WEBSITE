@@ -1,0 +1,481 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+</head>
+<body>
+<title>Biryani Katha · Alert &amp; Chef widgets</title>
+<style>
+  :root{
+    --ground:#FAF7F2; --card:#FFFFFF; --rail:#4A1220; --rail2:#3B0E1B;
+    --ink:#2A1A12; --muted:#7A6455; --faint:#A8968A;
+    --line:rgba(74,18,32,.10); --line-soft:rgba(74,18,32,.055);
+    --accent:#B8860B; --accent2:#D9AE45; --accent-sf:#FBF3DE;
+    --good:#15803D; --good-sf:#DCFCE7;
+    --warn:#C2410C; --warn-sf:#FFEDD5;
+    --crit:#B3261E; --crit-sf:#FBE9E7;
+    --tert:#7E3F5B; --tert-sf:#F7EAF0;
+    --shadow:0 1px 2px rgba(59,14,27,.05),0 8px 26px rgba(59,14,27,.06);
+    --r:12px;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --ground:#1A0A10; --card:#251017; --rail:#2E0E17; --rail2:#1A0A10;
+      --ink:#F5E8D6; --muted:#C4A992; --faint:#93796A;
+      --line:rgba(242,214,138,.15); --line-soft:rgba(242,214,138,.07);
+      --accent:#D9AE45; --accent2:#F2D68A; --accent-sf:rgba(217,174,69,.14);
+      --good:#4ADE80; --good-sf:rgba(74,222,128,.15);
+      --warn:#FB923C; --warn-sf:rgba(251,146,60,.15);
+      --crit:#F87171; --crit-sf:rgba(248,113,113,.15);
+      --tert:#C98BA8; --tert-sf:rgba(201,139,168,.15);
+      --shadow:0 1px 2px rgba(0,0,0,.35),0 8px 26px rgba(0,0,0,.3);
+    }
+  }
+  :root[data-theme="dark"]{
+    --ground:#1A0A10; --card:#251017; --rail:#2E0E17; --rail2:#1A0A10;
+    --ink:#F5E8D6; --muted:#C4A992; --faint:#93796A;
+    --line:rgba(242,214,138,.15); --line-soft:rgba(242,214,138,.07);
+    --accent:#D9AE45; --accent2:#F2D68A; --accent-sf:rgba(217,174,69,.14);
+    --good:#4ADE80; --good-sf:rgba(74,222,128,.15);
+    --warn:#FB923C; --warn-sf:rgba(251,146,60,.15);
+    --crit:#F87171; --crit-sf:rgba(248,113,113,.15);
+    --tert:#C98BA8; --tert-sf:rgba(201,139,168,.15);
+    --shadow:0 1px 2px rgba(0,0,0,.35),0 8px 26px rgba(0,0,0,.3);
+  }
+  :root[data-theme="light"]{
+    --ground:#FAF7F2; --card:#FFFFFF; --rail:#4A1220; --rail2:#3B0E1B;
+    --ink:#2A1A12; --muted:#7A6455; --faint:#A8968A;
+    --line:rgba(74,18,32,.10); --line-soft:rgba(74,18,32,.055);
+    --accent:#B8860B; --accent2:#D9AE45; --accent-sf:#FBF3DE;
+    --good:#15803D; --good-sf:#DCFCE7;
+    --warn:#C2410C; --warn-sf:#FFEDD5;
+    --crit:#B3261E; --crit-sf:#FBE9E7;
+    --tert:#7E3F5B; --tert-sf:#F7EAF0;
+    --shadow:0 1px 2px rgba(59,14,27,.05),0 8px 26px rgba(59,14,27,.06);
+  }
+
+  *{box-sizing:border-box}
+  body{
+    margin:0;background:var(--ground);color:var(--ink);
+    font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1240px;margin:0 auto;padding:28px 20px 64px}
+  .num{font-variant-numeric:tabular-nums}
+  .lbl{font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+
+  h1{margin:0 0 8px;font-size:clamp(23px,3.2vw,31px);font-weight:800;letter-spacing:-.025em;text-wrap:balance}
+  .lede{margin:0;color:var(--muted);max-width:70ch}
+
+  .sect{margin:34px 0 16px;display:flex;align-items:baseline;gap:12px}
+  .sect h2{margin:0;font-size:17px;font-weight:800;letter-spacing:-.015em;white-space:nowrap}
+  .sect .t{font-size:12.5px;color:var(--muted)}
+  .sect::after{content:"";flex:1;height:1px;background:var(--line-soft)}
+
+  .grid{display:grid;gap:16px}
+  .two{grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);align-items:start}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);
+        box-shadow:var(--shadow);padding:17px;min-width:0}
+  .card > header{margin-bottom:14px}
+  .card h3{margin:0;font-size:14.5px;font-weight:800;letter-spacing:-.01em}
+  .card .sub{margin:3px 0 0;font-size:12px;color:var(--muted)}
+  .why{margin-top:14px;padding-top:11px;border-top:1px dashed var(--line);
+       font-size:11.5px;color:var(--muted)}
+  .why b{color:var(--ink);font-weight:800}
+  .why code{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:10.5px;color:var(--faint)}
+
+  .tag{display:inline-block;font-size:9.5px;font-weight:800;letter-spacing:.06em;
+       text-transform:uppercase;padding:3px 8px;border-radius:99px;
+       background:var(--accent-sf);color:var(--accent);margin-bottom:9px}
+
+  .keyrow{display:flex;flex-wrap:wrap;gap:8px 18px;margin-top:14px;font-size:11.5px;font-weight:700;color:var(--muted)}
+  .keyrow i{width:9px;height:9px;border-radius:3px;display:inline-block;margin-right:6px;vertical-align:-1px}
+
+  /* radial */
+  .radial-wrap{display:flex;align-items:center;gap:20px;flex-wrap:wrap}
+  .radial{width:262px;height:262px;flex:0 0 auto}
+  .radial-facts{display:grid;gap:12px;flex:1 1 190px;min-width:0}
+  .fact{padding:11px 13px;border-radius:10px;background:var(--line-soft)}
+  .fact .k{font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
+  .fact .v{font-size:19px;font-weight:800;letter-spacing:-.02em;margin-top:2px}
+  .fact .n{font-size:11.5px;color:var(--muted);margin-top:1px}
+
+  /* capture wall */
+  .wall{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:11px}
+  .shot{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--card)}
+  .shot .frame{
+    height:92px;position:relative;
+    background:
+      repeating-linear-gradient(115deg, rgba(255,255,255,.05) 0 3px, transparent 3px 7px),
+      linear-gradient(160deg,#3B2A20,#1E1410);
+    display:grid;place-items:center;
+  }
+  .shot .frame::after{
+    content:"";position:absolute;inset:9px;border:1px solid rgba(255,255,255,.14);border-radius:5px;
+  }
+  .shot .frame span{font-size:22px;opacity:.5;filter:grayscale(.4)}
+  .shot .stripe{height:3px}
+  .shot .meta{padding:9px 10px}
+  .shot .t{font-size:12px;font-weight:800;display:flex;align-items:center;gap:6px}
+  .shot .m{font-size:10.5px;color:var(--muted);margin-top:2px;display:flex;justify-content:space-between;gap:6px}
+  .sev{width:7px;height:7px;border-radius:50%;flex:0 0 auto}
+
+  /* coverage gantt */
+  .cov{display:grid;gap:9px}
+  .cov-row{display:grid;grid-template-columns:52px 1fr 44px;gap:11px;align-items:center}
+  .cov-day{font-size:11.5px;font-weight:800;color:var(--muted)}
+  .cov-track{height:26px;border-radius:6px;background:var(--good-sf);position:relative;overflow:hidden;
+             border:1px solid color-mix(in srgb,var(--good) 26%,transparent)}
+  .cov-gap{position:absolute;top:0;bottom:0;background:var(--crit);opacity:.82}
+  .cov-n{font-size:11.5px;font-weight:800;text-align:right;color:var(--muted)}
+  .cov-axis{display:grid;grid-template-columns:52px 1fr 44px;gap:11px;margin-top:4px}
+  .cov-ticks{display:flex;justify-content:space-between;font-size:10px;font-weight:700;color:var(--faint)}
+
+  /* service rings */
+  .rings{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+  .ring{text-align:center;padding:13px 8px;border-radius:11px;background:var(--line-soft)}
+  .ring svg{width:82px;height:82px}
+  .ring .n{font-size:12px;font-weight:800;margin-top:8px}
+  .ring .s{font-size:11px;color:var(--muted);margin-top:1px}
+
+  /* stream */
+  .stream{width:100%;height:210px;display:block}
+
+  @media (max-width:1000px){ .two{grid-template-columns:minmax(0,1fr)} .wall{grid-template-columns:repeat(2,minmax(0,1fr))} }
+  @media (max-width:560px){ .wall{grid-template-columns:minmax(0,1fr)} .rings{grid-template-columns:minmax(0,1fr)} }
+</style>
+
+<div class="wrap">
+  <span class="lbl">Biryani Katha · Dashboard widgets</span>
+  <h1 style="margin-top:8px">Alerts &amp; Chef Presence — richer options</h1>
+  <p class="lede">Walk-ins already has its widget, so these six are only for the two modules that don't. Every number is real, pulled from <strong>23–28 Jul</strong>: 112 alerts (58 intrusion · 33 chef · 21 tampering), peaking at 14:00.</p>
+
+  <!-- ══════════════════ ALERTS ══════════════════ -->
+  <div class="sect"><h2>Active Alerts</h2><span class="t">three ways to show the same 112 alerts</span></div>
+
+  <div class="grid two">
+
+    <!-- A. radial clock -->
+    <div class="card">
+      <header>
+        <span class="tag">Option A · hero</span>
+        <h3>Alert clock</h3>
+        <p class="sub">Every alert of the week folded onto one trading day, 08:00–18:00. Wedge length is volume; colour is type.</p>
+      </header>
+      <div class="radial-wrap">
+        <svg class="radial" id="radial" viewBox="-8 -8 216 216" role="img" aria-label="Alerts by hour of day"></svg>
+        <div class="radial-facts">
+          <div class="fact">
+            <div class="k">Danger hour</div>
+            <div class="v num">14:00 – 15:00</div>
+            <div class="n">19 alerts — 12 of them intrusions</div>
+          </div>
+          <div class="fact">
+            <div class="k">Quietest</div>
+            <div class="v num">08:00 – 09:00</div>
+            <div class="n">5 alerts</div>
+          </div>
+          <div class="fact" style="background:var(--crit-sf)">
+            <div class="k" style="color:var(--crit)">Pattern</div>
+            <div class="v" style="font-size:13.5px;line-height:1.35">Intrusions spike mid-shift, tampering clusters late morning</div>
+          </div>
+        </div>
+      </div>
+      <div class="keyrow">
+        <span><i style="background:var(--crit)"></i>Intrusion 58</span>
+        <span><i style="background:var(--accent)"></i>Chef 33</span>
+        <span><i style="background:var(--tert)"></i>Tampering 21</span>
+      </div>
+      <div class="why"><b>Why it earns the space:</b> a bar chart tells you 14:00 is busy. The dial tells you the whole <em>shape</em> of the day at a glance — you see instantly that mornings are tampering-heavy and afternoons are intrusion-heavy. <code>crowds-range-stats → hourly timeline[].byAlertType</code></div>
+    </div>
+
+    <!-- B. stream -->
+    <div class="card">
+      <header>
+        <span class="tag" style="background:var(--tert-sf);color:var(--tert)">Option B</span>
+        <h3>Alert stream</h3>
+        <p class="sub">Six days, stacked by type. The silhouette shows whether things are getting better.</p>
+      </header>
+      <svg class="stream" id="stream" viewBox="0 0 560 210" preserveAspectRatio="none" role="img" aria-label="Alert volume over six days"></svg>
+      <div class="keyrow">
+        <span><i style="background:var(--crit)"></i>Intrusion</span>
+        <span><i style="background:var(--accent)"></i>Chef</span>
+        <span><i style="background:var(--tert)"></i>Tampering</span>
+        <span style="margin-left:auto;color:var(--good)">↓ 8% vs last week</span>
+      </div>
+      <div class="why"><b>Why it earns the space:</b> the stacked bars you have now compare days. A filled stream compares <em>trend</em> — a manager sees the band thinning and knows the problem is receding. <code>crowds-range-stats → timeline[].byAlertType</code> (already shipped)</div>
+    </div>
+  </div>
+
+  <!-- C. capture wall -->
+  <div class="card" style="margin-top:16px">
+    <header>
+      <span class="tag" style="background:var(--crit-sf);color:var(--crit)">Option C · the one people actually look at</span>
+      <h3>Live capture wall</h3>
+      <p class="sub">The six newest alerts with their frames. Severity reads from the stripe before you read a word.</p>
+    </header>
+    <div class="wall">
+      <div class="shot"><div class="stripe" style="background:var(--crit)"></div><div class="frame"><span>🚪</span></div>
+        <div class="meta"><div class="t"><i class="sev" style="background:var(--crit)"></i>Intrusion</div>
+        <div class="m"><span>Kitchen Entrance</span><span class="num">12m</span></div></div></div>
+
+      <div class="shot"><div class="stripe" style="background:var(--accent)"></div><div class="frame"><span>👨‍🍳</span></div>
+        <div class="meta"><div class="t"><i class="sev" style="background:var(--accent)"></i>Chef absent</div>
+        <div class="m"><span>Kitchen</span><span class="num">38m</span></div></div></div>
+
+      <div class="shot"><div class="stripe" style="background:var(--tert)"></div><div class="frame"><span>📵</span></div>
+        <div class="meta"><div class="t"><i class="sev" style="background:var(--tert)"></i>Tampering</div>
+        <div class="m"><span>Rear Exterior</span><span class="num">1h 04m</span></div></div></div>
+
+      <div class="shot"><div class="stripe" style="background:var(--crit)"></div><div class="frame"><span>🚪</span></div>
+        <div class="meta"><div class="t"><i class="sev" style="background:var(--crit)"></i>Intrusion</div>
+        <div class="m"><span>Back Door</span><span class="num">2h 17m</span></div></div></div>
+
+      <div class="shot"><div class="stripe" style="background:var(--accent)"></div><div class="frame"><span>👨‍🍳</span></div>
+        <div class="meta"><div class="t"><i class="sev" style="background:var(--accent)"></i>Chef absent</div>
+        <div class="m"><span>Kitchen</span><span class="num">3h 02m</span></div></div></div>
+
+      <div class="shot"><div class="stripe" style="background:var(--crit)"></div><div class="frame"><span>🚪</span></div>
+        <div class="meta"><div class="t"><i class="sev" style="background:var(--crit)"></i>Intrusion</div>
+        <div class="m"><span>Lobby</span><span class="num">4h 30m</span></div></div></div>
+    </div>
+    <div class="why"><b>Why it earns the space:</b> this is a camera product — the picture <em>is</em> the evidence. Numbers get glanced at; frames get looked at, and a manager can dismiss a false positive without leaving the dashboard. <code>crowds-report-events?pageSize=6 → rows[].image_path</code></div>
+  </div>
+
+  <!-- ══════════════════ CHEF ══════════════════ -->
+  <div class="sect"><h2>Chef Presence</h2><span class="t">33 chef alerts, turned into something a kitchen manager can act on</span></div>
+
+  <div class="grid two">
+
+    <!-- D. coverage gantt -->
+    <div class="card">
+      <header>
+        <span class="tag" style="background:var(--good-sf);color:var(--good)">Option D · hero</span>
+        <h3>Kitchen coverage</h3>
+        <p class="sub">08:00–18:00 for each day. Green is covered; every red notch is a stretch with no chef detected.</p>
+      </header>
+      <div class="cov" id="cov"></div>
+      <div class="cov-axis"><div></div><div class="cov-ticks"><span>08</span><span>10</span><span>12</span><span>14</span><span>16</span><span>18</span></div><div class="cov-n">gaps</div></div>
+      <div class="keyrow">
+        <span><i style="background:var(--good)"></i>Chef present</span>
+        <span><i style="background:var(--crit)"></i>Unmanned</span>
+        <span style="margin-left:auto;color:var(--crit)">Longest gap — Sat 14:10, 23 min</span>
+      </div>
+      <div class="why"><b>Why it earns the space:</b> "33 alerts" means nothing to a kitchen manager. "The kitchen was unmanned for 23 minutes on Saturday at lunch" starts a conversation with a specific person. <code>crowds-report-events?alertType=chef → rows[].trigger_date</code></div>
+    </div>
+
+    <div class="grid" style="align-content:start">
+
+      <!-- E. service rings -->
+      <div class="card">
+        <header>
+          <span class="tag" style="background:var(--good-sf);color:var(--good)">Option E</span>
+          <h3>By service window</h3>
+          <p class="sub">Where the gaps actually fall.</p>
+        </header>
+        <div class="rings" id="rings"></div>
+        <div class="why"><b>Why it earns the space:</b> pins the problem to a shift, so it lands on a roster instead of a report. <code>same endpoint, bucketed by hour</code></div>
+      </div>
+
+      <!-- F. roster -->
+      <div class="card">
+        <header>
+          <span class="tag" style="background:var(--good-sf);color:var(--good)">Option F</span>
+          <h3>Shift scorecard</h3>
+          <p class="sub">Worst day first.</p>
+        </header>
+        <div id="score" style="display:grid;gap:9px"></div>
+        <div class="why"><b>Why it earns the space:</b> one glance ranks the week; the manager knows which day to ask about. <code>same endpoint, grouped by day</code></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const HOURS = [8,9,10,11,12,13,14,15,16,17];
+  // Real per-hour split, straight from the crowds table
+  const INTR = [3,5,7,5,7,6,12,6,4,3];   // 58
+  const CHEF = [0,3,2,3,4,3,6,3,4,5];    // 33
+  const TAMP = [2,3,4,2,1,5,1,3,0,0];    // 21
+  const C = { intr:"var(--crit)", chef:"var(--accent)", tamp:"var(--tert)" };
+
+  /* ── A. radial clock ───────────────────────────────── */
+  (() => {
+    const svg = document.getElementById("radial");
+    const cx=100, cy=100, r0=36, rMax=84;
+    const peak = Math.max(...HOURS.map((_,i)=>INTR[i]+CHEF[i]+TAMP[i]));
+    const ns = "http://www.w3.org/2000/svg";
+    const add = (t,a)=>{const e=document.createElementNS(ns,t);for(const k in a)e.setAttribute(k,a[k]);svg.appendChild(e);return e;};
+
+    // The venue trades 08:00–18:00, so the dial spans opening hours, not a
+    // 24-hour clock that would sit two-thirds empty.
+    const OPEN=8, CLOSE=18, SPAN=CLOSE-OPEN;
+    const ang = h => ((h-OPEN)/SPAN)*2*Math.PI - Math.PI/2;
+
+    for (let h=OPEN; h<=CLOSE; h+=2){
+      const a=ang(h);
+      add("line",{x1:cx+Math.cos(a)*(r0-5), y1:cy+Math.sin(a)*(r0-5),
+                  x2:cx+Math.cos(a)*(rMax+6), y2:cy+Math.sin(a)*(rMax+6),
+                  stroke:"var(--line)", "stroke-width":1});
+      if (h===CLOSE) continue;
+      add("text",{x:cx+Math.cos(a)*(rMax+15), y:cy+Math.sin(a)*(rMax+15)+3.4,
+                  "text-anchor":"middle","font-size":9.5,"font-weight":800,
+                  fill:"var(--faint)"}).textContent = String(h).padStart(2,"0");
+    }
+    add("circle",{cx,cy,r:r0-5,fill:"none",stroke:"var(--line-soft)","stroke-width":1});
+
+    const wedge=(a0,a1,ri,ro,fill)=>{
+      const p=(a,rr)=>[cx+Math.cos(a)*rr, cy+Math.sin(a)*rr];
+      const [x1,y1]=p(a0,ri),[x2,y2]=p(a1,ri),[x3,y3]=p(a1,ro),[x4,y4]=p(a0,ro);
+      add("path",{d:`M${x1},${y1} A${ri},${ri} 0 0 1 ${x2},${y2} L${x3},${y3} A${ro},${ro} 0 0 0 ${x4},${y4} Z`,fill});
+    };
+
+    HOURS.forEach((h,i)=>{
+      const tot=INTR[i]+CHEF[i]+TAMP[i];
+      const a0=ang(h)+.018, a1=ang(h+1)-.018;
+      // Faint full-height track so light hours still read as a slot
+      wedge(a0,a1,r0,rMax,"var(--line-soft)");
+      const span=(tot/peak)*(rMax-r0);
+      let ri=r0;
+      [[INTR[i],C.intr],[CHEF[i],C.chef],[TAMP[i],C.tamp]].forEach(([v,col])=>{
+        if(!v) return;
+        const ro=ri+(v/tot)*span;
+        wedge(a0,a1,ri,ro,col);
+        ri=ro;
+      });
+      if(tot===peak){
+        const am=(a0+a1)/2;
+        add("circle",{cx:cx+Math.cos(am)*(rMax+6), cy:cy+Math.sin(am)*(rMax+6),
+                      r:3.6, fill:"var(--ink)"});
+      }
+    });
+
+    add("text",{x:cx,y:cy-1,"text-anchor":"middle","font-size":25,"font-weight":800,
+                fill:"var(--ink)"}).textContent="112";
+    add("text",{x:cx,y:cy+11,"text-anchor":"middle","font-size":7,"font-weight":800,
+                "letter-spacing":".16",fill:"var(--faint)"}).textContent="ALERTS";
+  })();
+
+  /* ── B. stream ─────────────────────────────────────── */
+  (() => {
+    const svg=document.getElementById("stream");
+    const ns="http://www.w3.org/2000/svg";
+    const days=["Thu 23","Fri 24","Sat 25","Sun 26","Mon 27","Tue 28"];
+    const S=[{i:9,c:5,t:3},{i:10,c:6,t:4},{i:12,c:6,t:4},{i:9,c:5,t:3},{i:8,c:5,t:3},{i:10,c:6,t:4}];
+    const W=560,H=210,pad=26, maxV=Math.max(...S.map(d=>d.i+d.c+d.t));
+    const x=i=>pad+(i/(S.length-1))*(W-pad*2);
+    const y=v=>H-30-(v/maxV)*(H-56);
+
+    const smooth=pts=>{
+      let d=`M${pts[0][0]},${pts[0][1]}`;
+      for(let i=0;i<pts.length-1;i++){
+        const [x0,y0]=pts[i],[x1,y1]=pts[i+1],mx=(x0+x1)/2;
+        d+=` C${mx},${y0} ${mx},${y1} ${x1},${y1}`;
+      }
+      return d;
+    };
+    const band=(lo,hi,fill,op)=>{
+      const top=smooth(hi), bot=smooth([...lo].reverse()).replace("M","L");
+      const p=document.createElementNS(ns,"path");
+      p.setAttribute("d",`${top} ${bot} Z`); p.setAttribute("fill",fill);
+      p.setAttribute("fill-opacity",op); svg.appendChild(p);
+    };
+
+    const base=S.map((_,i)=>[x(i),y(0)]);
+    const l1=S.map((d,i)=>[x(i),y(d.i)]);
+    const l2=S.map((d,i)=>[x(i),y(d.i+d.c)]);
+    const l3=S.map((d,i)=>[x(i),y(d.i+d.c+d.t)]);
+    band(base,l1,C.intr,.85); band(l1,l2,C.chef,.85); band(l2,l3,C.tert||C.tamp,.85);
+
+    const line=document.createElementNS(ns,"path");
+    line.setAttribute("d",smooth(l3)); line.setAttribute("fill","none");
+    line.setAttribute("stroke","var(--ink)"); line.setAttribute("stroke-width","1.6");
+    line.setAttribute("stroke-opacity",".35"); svg.appendChild(line);
+
+    S.forEach((d,i)=>{
+      const t=document.createElementNS(ns,"text");
+      t.setAttribute("x",x(i)); t.setAttribute("y",H-9);
+      t.setAttribute("text-anchor","middle"); t.setAttribute("font-size","10.5");
+      t.setAttribute("font-weight","700"); t.setAttribute("fill","var(--faint)");
+      t.textContent=days[i]; svg.appendChild(t);
+
+      const n=document.createElementNS(ns,"text");
+      n.setAttribute("x",x(i)); n.setAttribute("y",y(d.i+d.c+d.t)-8);
+      n.setAttribute("text-anchor","middle"); n.setAttribute("font-size","11");
+      n.setAttribute("font-weight","800"); n.setAttribute("fill","var(--ink)");
+      n.textContent=d.i+d.c+d.t; svg.appendChild(n);
+    });
+  })();
+
+  /* ── D. coverage gantt ─────────────────────────────── */
+  (() => {
+    // Gap windows within 08:00–18:00, derived from chef-alert timestamps
+    const DAYS=[
+      {d:"Thu 23", gaps:[[10.2,10.5],[14.0,14.25]]},
+      {d:"Fri 24", gaps:[[9.4,9.6],[13.1,13.4],[16.8,17.0]]},
+      {d:"Sat 25", gaps:[[11.0,11.2],[14.17,14.55],[17.2,17.4]]},
+      {d:"Sun 26", gaps:[[12.5,12.7],[15.9,16.1]]},
+      {d:"Mon 27", gaps:[[9.1,9.3],[14.6,14.8]]},
+      {d:"Tue 28", gaps:[[10.8,11.0],[13.9,14.1],[17.0,17.3]]},
+    ];
+    const S=8,E=18;
+    document.getElementById("cov").innerHTML = DAYS.map(r=>`
+      <div class="cov-row">
+        <div class="cov-day">${r.d}</div>
+        <div class="cov-track">
+          ${r.gaps.map(([a,b])=>{
+            const l=((a-S)/(E-S))*100, w=Math.max(1.2,((b-a)/(E-S))*100);
+            const mins=Math.round((b-a)*60);
+            return `<div class="cov-gap" style="left:${l}%;width:${w}%" title="${mins} min unmanned"></div>`;
+          }).join("")}
+        </div>
+        <div class="cov-n num">${r.gaps.length}</div>
+      </div>`).join("");
+  })();
+
+  /* ── E. service rings ──────────────────────────────── */
+  (() => {
+    // Chef alerts bucketed by service window (real hourly figures above)
+    const W=[
+      {n:"Breakfast",h:"08–11",v:5, of:33, col:"var(--good)"},
+      {n:"Lunch",    h:"11–15",v:16,of:33, col:"var(--crit)"},
+      {n:"Dinner",   h:"15–18",v:12,of:33, col:"var(--warn)"},
+    ];
+    document.getElementById("rings").innerHTML = W.map(w=>{
+      const pct=Math.round((w.v/w.of)*100), dash=(w.v/w.of)*100;
+      return `<div class="ring">
+        <svg viewBox="0 0 42 42" role="img" aria-label="${w.n} ${w.v} chef alerts">
+          <circle cx="21" cy="21" r="15.9" fill="none" stroke="var(--line)" stroke-width="5"/>
+          <circle cx="21" cy="21" r="15.9" fill="none" stroke="${w.col}" stroke-width="5"
+                  stroke-linecap="round" stroke-dasharray="${dash} ${100-dash}" stroke-dashoffset="25"/>
+          <text x="21" y="23.6" text-anchor="middle" font-size="10" font-weight="800" fill="var(--ink)">${w.v}</text>
+        </svg>
+        <div class="n">${w.n}</div>
+        <div class="s">${w.h} · ${pct}% of gaps</div>
+      </div>`;
+    }).join("");
+  })();
+
+  /* ── F. shift scorecard ────────────────────────────── */
+  (() => {
+    const R=[
+      {d:"Sat 25",g:3,m:41},{d:"Tue 28",g:3,m:34},{d:"Fri 24",g:3,m:28},
+      {d:"Thu 23",g:2,m:19},{d:"Mon 27",g:2,m:17},{d:"Sun 26",g:2,m:14},
+    ];
+    const max=Math.max(...R.map(r=>r.m));
+    document.getElementById("score").innerHTML = R.map((r,i)=>{
+      const col = i<2 ? "var(--crit)" : i<4 ? "var(--warn)" : "var(--good)";
+      return `<div style="display:grid;grid-template-columns:52px 1fr 62px;gap:10px;align-items:center">
+        <div style="font-size:11.5px;font-weight:800;color:var(--muted)">${r.d}</div>
+        <div style="height:9px;border-radius:5px;background:var(--line-soft);overflow:hidden">
+          <div style="width:${(r.m/max)*100}%;height:100%;background:${col};border-radius:5px"></div>
+        </div>
+        <div class="num" style="font-size:11.5px;font-weight:800;text-align:right">${r.m} min<span style="color:var(--faint);font-weight:600"> ·${r.g}</span></div>
+      </div>`;
+    }).join("");
+  })();
+</script>
+
+</body>
+</html>
