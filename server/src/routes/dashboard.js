@@ -75,16 +75,18 @@ const evHve = evManilaHour("ve.created_at", null);
 const evYmdVe = evManilaYmdFmt("ve.created_at", null);
 const evDisplayVe = evManilaExpr("ve.created_at", null);
 const evDisplayFmtVe = evManilaDateTimeFmt("ve.created_at", null);
-const wD = "DATE(trigger_date)";
-const wH = "HOUR(trigger_date)";
-const wYmd = "DATE_FORMAT(trigger_date, '%Y-%m-%d')";
+// walkins/crowds store trigger_date already in site time, so these need no
+// zone conversion -- only the MySQL -> Postgres function spellings.
+const wD = "trigger_date::date";
+const wH = "EXTRACT(HOUR FROM trigger_date)::int";
+const wYmd = "TO_CHAR(trigger_date, 'YYYY-MM-DD')";
 const wDisplay = "trigger_date";
-const wDisplayFmt = "DATE_FORMAT(trigger_date, '%Y-%m-%d %H:%i:%s')";
-const cD = "DATE(trigger_date)";
-const cH = "HOUR(trigger_date)";
-const cYmd = "DATE_FORMAT(trigger_date, '%Y-%m-%d')";
+const wDisplayFmt = "TO_CHAR(trigger_date, 'YYYY-MM-DD HH24:MI:SS')";
+const cD = "trigger_date::date";
+const cH = "EXTRACT(HOUR FROM trigger_date)::int";
+const cYmd = "TO_CHAR(trigger_date, 'YYYY-MM-DD')";
 const cDisplay = "trigger_date";
-const cDisplayFmt = "DATE_FORMAT(trigger_date, '%Y-%m-%d %H:%i:%s')";
+const cDisplayFmt = "TO_CHAR(trigger_date, 'YYYY-MM-DD HH24:MI:SS')";
 const { VIOLATION_TYPES } = require("../lib/chatConstants");
 const VIOLATION_FEEDBACK_OK = "(tv.feedback IS NULL OR tv.feedback <> 0)";
 
@@ -394,7 +396,7 @@ function extraVehicleFilters(q) {
   if (q.plate) {
     const p = String(q.plate).trim();
     if (p) {
-      where.push("(vehicle_num LIKE ? OR vehicle_num_raw LIKE ?)");
+      where.push("(vehicle_num ILIKE ? OR vehicle_num_raw ILIKE ?)");
       params.push(`%${p}%`, `%${p}%`);
     }
   }
@@ -451,8 +453,10 @@ function parseWalkinGender(raw) {
   return WALKIN_GENDERS.includes(v) ? v : null;
 }
 
+// MySQL summed the 1/0 a comparison yields; Postgres has no boolean->int cast
+// inside SUM, so use an aggregate FILTER instead.
 const walkinGenderCountSelect = WALKIN_GENDERS.map(
-  (g) => `SUM(gender = '${g}') AS \`${g}\``
+  (g) => `COUNT(*) FILTER (WHERE gender = '${g}') AS \`${g}\``
 ).join(",\n      ");
 
 function walkinGenderCounts(row) {
@@ -664,7 +668,7 @@ async function loadCrowdSiteNames(pool, whereSql, baseParams) {
 // Per-alert-type counts, reused by the timeline buckets and the per-zone rollup
 // so every chart on the Alerts page can be broken down by type.
 const crowdTypeCountSelect = CROWD_ALERT_TYPES.map(
-  (t) => `SUM(alert_type = '${t}') AS \`${t}\``
+  (t) => `COUNT(*) FILTER (WHERE alert_type = '${t}') AS \`${t}\``
 ).join(",\n    ");
 
 function crowdTypeCounts(row) {
@@ -692,8 +696,8 @@ async function buildCrowdsTimeline(pool, from, to, spanDays, whereSql, baseParam
   const bucketSelect = `
     COUNT(*) AS alerts,
     ${crowdTypeCountSelect},
-    MAX(people_count) AS peakPeople,
-    MAX(occupancy_pct) AS peakOccupancy
+    MAX(people_count) AS "peakPeople",
+    MAX(occupancy_pct) AS "peakOccupancy"
   `;
 
   if (hourlyForced) {
@@ -839,12 +843,12 @@ router.get("/range-stats", async (req, res) => {
       `
       SELECT
         COUNT(*) AS total,
-        SUM(CASE WHEN vehicle_category IN (1,2) THEN 1 ELSE 0 END) AS CAR,
-        SUM(CASE WHEN vehicle_category IN (3,4) THEN 1 ELSE 0 END) AS TRUCK,
-        SUM(CASE WHEN vehicle_category IN (5,6) THEN 1 ELSE 0 END) AS BIKE,
-        SUM(CASE WHEN vehicle_category IN (7,8) THEN 1 ELSE 0 END) AS MINITRUCK,
-        SUM(CASE WHEN vehicle_category IN (9,10) THEN 1 ELSE 0 END) AS BUS,
-        SUM(CASE WHEN vehicle_category IN (11,12) THEN 1 ELSE 0 END) AS AUTO
+        SUM(CASE WHEN vehicle_category IN (1,2) THEN 1 ELSE 0 END) AS "CAR",
+        SUM(CASE WHEN vehicle_category IN (3,4) THEN 1 ELSE 0 END) AS "TRUCK",
+        SUM(CASE WHEN vehicle_category IN (5,6) THEN 1 ELSE 0 END) AS "BIKE",
+        SUM(CASE WHEN vehicle_category IN (7,8) THEN 1 ELSE 0 END) AS "MINITRUCK",
+        SUM(CASE WHEN vehicle_category IN (9,10) THEN 1 ELSE 0 END) AS "BUS",
+        SUM(CASE WHEN vehicle_category IN (11,12) THEN 1 ELSE 0 END) AS "AUTO"
       FROM vehicle_events
       WHERE ${whereSql}
     `,
@@ -1069,8 +1073,8 @@ router.get("/overview", async (req, res) => {
     const [[counts]] = await pool.query(
       `
       SELECT
-        COUNT(*) AS totalReads,
-        COUNT(DISTINCT NULLIF(TRIM(vehicle_num), '')) AS uniquePlates
+        COUNT(*) AS "totalReads",
+        COUNT(DISTINCT NULLIF(TRIM(vehicle_num), '')) AS "uniquePlates"
       FROM vehicle_events
       WHERE ${evD} BETWEEN ? AND ?
       ${evHourClip.sql}
@@ -1186,7 +1190,7 @@ router.get("/overview", async (req, res) => {
       SELECT
         vehicle_num AS plate,
         COUNT(*) AS read_count,
-        SUBSTRING_INDEX(GROUP_CONCAT(camera_id ORDER BY ${evDisplay} DESC, id DESC), ',', 1) AS last_camera_id
+        (ARRAY_AGG(camera_id ORDER BY ${evDisplay} DESC, id DESC))[1] AS last_camera_id
       FROM vehicle_events
       WHERE ${evD} BETWEEN ? AND ?
       ${evHourClip.sql}
@@ -1248,7 +1252,7 @@ router.get("/violations-summary", async (req, res) => {
   where.push("(tv.feedback IS NULL OR tv.feedback <> 0)");
   const params = [from, to];
   if (plate) {
-    where.push("(ve.vehicle_num LIKE ? OR ve.vehicle_num_raw LIKE ?)");
+    where.push("(ve.vehicle_num ILIKE ? OR ve.vehicle_num_raw ILIKE ?)");
     params.push(`%${plate}%`, `%${plate}%`);
   }
   if (cameraId) {
@@ -1292,7 +1296,7 @@ router.get("/violations-recidivism", async (req, res) => {
   try {
     const [[summary]] = await pool.query(
       `
-      SELECT COUNT(*) AS repeatPlates
+      SELECT COUNT(*) AS "repeatPlates"
       FROM (
         SELECT ve.vehicle_num
         FROM traffic_violations tv
@@ -1314,7 +1318,7 @@ router.get("/violations-recidivism", async (req, res) => {
         ve.vehicle_num AS plate,
         COUNT(*) AS violation_count,
         COUNT(DISTINCT tv.violation_type) AS type_count,
-        SUBSTRING_INDEX(GROUP_CONCAT(tv.violation_type ORDER BY ${evDisplayVe} DESC, ve.id DESC, tv.id DESC), ',', 1) AS latest_type,
+        (ARRAY_AGG(tv.violation_type ORDER BY ${evDisplayVe} DESC, ve.id DESC, tv.id DESC))[1] AS latest_type,
         ${evManilaDateTimeFmt("MAX(ve.created_at)", null)} AS latest_detected_at
       FROM traffic_violations tv
       JOIN vehicle_events ve ON ve.event_id = tv.event_id
@@ -1422,7 +1426,7 @@ router.get("/violations", async (req, res) => {
     params.push(violationType);
   }
   if (plate) {
-    where.push("(ve.vehicle_num LIKE ? OR ve.vehicle_num_raw LIKE ?)");
+    where.push("(ve.vehicle_num ILIKE ? OR ve.vehicle_num_raw ILIKE ?)");
     params.push(`%${plate}%`, `%${plate}%`);
   }
   if (cameraId) {
@@ -1627,7 +1631,7 @@ router.get("/top-plates", async (req, res) => {
         vehicle_num AS plate,
         COUNT(*) AS total,
         ${evManilaDateTimeFmt("MAX(created_at)", null)} AS last_seen,
-        SUBSTRING_INDEX(GROUP_CONCAT(camera_id ORDER BY ${evDisplay} DESC, id DESC), ',', 1) AS last_camera_id
+        (ARRAY_AGG(camera_id ORDER BY ${evDisplay} DESC, id DESC))[1] AS last_camera_id
       FROM vehicle_events
       WHERE ${evD} BETWEEN ? AND ?
         AND vehicle_num IS NOT NULL
@@ -1741,7 +1745,9 @@ router.get("/watchlist-hits", async (req, res) => {
 
   try {
     const cameraMap = await loadMergedCameraMap(pool);
-    const [[tVe]] = await pool.query("SHOW TABLES LIKE 'vehicle_events'");
+    // Postgres has no SHOW TABLES; to_regclass() returns NULL when the relation
+    // is absent, and the WHERE keeps the "0 or 1 rows" shape the caller expects.
+    const [[tVe]] = await pool.query("SELECT 1 AS ok WHERE to_regclass('vehicle_events') IS NOT NULL");
     if (!tVe) {
       return res.json({ from, to, limit, rows: [], activeWatchlists: 0, lastHit: null });
     }
@@ -2083,11 +2089,11 @@ router.get("/crowds-range-stats", async (req, res) => {
       `
       SELECT
         COUNT(*) AS total,
-        MAX(people_count) AS peakPeople,
-        MAX(occupancy_pct) AS peakOccupancy,
-        SUM(CASE WHEN occupancy_pct < ? THEN 1 ELSE 0 END) AS ALERT,
-        SUM(CASE WHEN occupancy_pct >= ? AND occupancy_pct < ? THEN 1 ELSE 0 END) AS ALARM,
-        SUM(CASE WHEN occupancy_pct >= ? THEN 1 ELSE 0 END) AS CRITICAL
+        MAX(people_count) AS "peakPeople",
+        MAX(occupancy_pct) AS "peakOccupancy",
+        SUM(CASE WHEN occupancy_pct < ? THEN 1 ELSE 0 END) AS "ALERT",
+        SUM(CASE WHEN occupancy_pct >= ? AND occupancy_pct < ? THEN 1 ELSE 0 END) AS "ALARM",
+        SUM(CASE WHEN occupancy_pct >= ? THEN 1 ELSE 0 END) AS "CRITICAL"
       FROM crowds
       WHERE ${whereSql}
     `,
@@ -2100,12 +2106,12 @@ router.get("/crowds-range-stats", async (req, res) => {
         camera_id,
         COUNT(*) AS alerts,
         ${crowdTypeCountSelect},
-        MAX(people_count) AS peakPeople,
-        MAX(occupancy_pct) AS peakOccupancy
+        MAX(people_count) AS "peakPeople",
+        MAX(occupancy_pct) AS "peakOccupancy"
       FROM crowds
       WHERE ${whereSql}
       GROUP BY camera_id
-      ORDER BY alerts DESC, peakOccupancy DESC
+      ORDER BY alerts DESC, "peakOccupancy" DESC
     `,
       baseParams
     );

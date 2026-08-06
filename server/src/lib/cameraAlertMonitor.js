@@ -1,5 +1,10 @@
 const nodemailer = require("nodemailer");
 const { CAMERA_REGISTRY } = require("../cameras");
+const { epochMillis } = require("../eventTimeSql");
+
+// walkins/crowds.trigger_date is written by the DB trigger in site wall time,
+// not the vehicle_events DB wall clock. Keep in step with dbMigrations.js.
+const SITE_WALL_TZ = "+08:00";
 
 const ALERT_EMAIL = "shivang.agarwal@bluecloudsoftech.com";
 const CHECK_INTERVAL_MS = 5 * 60 * 1000;     // run check every 5 minutes
@@ -170,9 +175,9 @@ async function fetchOnlineStatus(pool) {
   const lastSeen = new Map();
 
   const [evRows, wRows, cRows] = await Promise.all([
-    pool.query(`SELECT camera_id, MAX(CASE WHEN timestamp > 0 THEN timestamp ELSE UNIX_TIMESTAMP(created_at)*1000 END) AS ms FROM vehicle_events GROUP BY camera_id`),
-    pool.query(`SELECT camera_id, MAX(UNIX_TIMESTAMP(trigger_date)*1000) AS ms FROM walkins GROUP BY camera_id`),
-    pool.query(`SELECT camera_id, MAX(UNIX_TIMESTAMP(trigger_date)*1000) AS ms FROM crowds GROUP BY camera_id`),
+    pool.query(`SELECT camera_id, MAX(CASE WHEN "timestamp" > 0 THEN "timestamp" ELSE ${epochMillis("created_at")} END) AS ms FROM vehicle_events GROUP BY camera_id`),
+    pool.query(`SELECT camera_id, MAX(${epochMillis("trigger_date", SITE_WALL_TZ)}) AS ms FROM walkins GROUP BY camera_id`),
+    pool.query(`SELECT camera_id, MAX(${epochMillis("trigger_date", SITE_WALL_TZ)}) AS ms FROM crowds GROUP BY camera_id`),
   ]);
 
   for (const [rows] of [evRows, wRows, cRows]) {
@@ -224,7 +229,7 @@ async function runCheck(pool) {
         await pool.query(
           `INSERT INTO camera_alert_status (camera_id, camera_name, status, last_seen_online, offline_since, alert_sent_at)
            VALUES (?, ?, 'online', ?, NULL, NULL)
-           ON DUPLICATE KEY UPDATE camera_name=VALUES(camera_name), status='online', last_seen_online=VALUES(last_seen_online), offline_since=NULL, alert_sent_at=NULL`,
+           ON CONFLICT (camera_id) DO UPDATE SET camera_name=EXCLUDED.camera_name, status='online', last_seen_online=EXCLUDED.last_seen_online, offline_since=NULL, alert_sent_at=NULL`,
           [camera_id, camera_name, now]
         );
 
@@ -238,7 +243,7 @@ async function runCheck(pool) {
           await pool.query(
             `INSERT INTO camera_alert_status (camera_id, camera_name, status, offline_since, alert_sent_at)
              VALUES (?, ?, 'offline', ?, NULL)
-             ON DUPLICATE KEY UPDATE camera_name=VALUES(camera_name), status='offline', offline_since=VALUES(offline_since), alert_sent_at=NULL`,
+             ON CONFLICT (camera_id) DO UPDATE SET camera_name=EXCLUDED.camera_name, status='offline', offline_since=EXCLUDED.offline_since, alert_sent_at=NULL`,
             [camera_id, camera_name, now]
           );
         } else {
@@ -261,7 +266,7 @@ async function runCheck(pool) {
               buildOfflineAlertHtml(thisCamEntry, allOffline.length ? allOffline : [thisCamEntry]),
               buildOfflineText(camera_name, thisCamEntry.offline_since, allOffline)
             );
-            await pool.query(`UPDATE camera_alert_status SET alert_sent_at=NOW() WHERE camera_id=?`, [camera_id]);
+            await pool.query(`UPDATE camera_alert_status SET alert_sent_at=LOCALTIMESTAMP WHERE camera_id=?`, [camera_id]);
             console.log(`[CameraAlert] Offline alert sent for ${camera_name} (${allOffline.length} total offline)`);
           }
         }

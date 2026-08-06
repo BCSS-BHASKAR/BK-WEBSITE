@@ -123,7 +123,7 @@ function cap(through) {
 async function countWalkins(pool, from, to, through) {
   const c = cap(through);
   const [[row]] = await pool.query(
-    `SELECT COUNT(*) AS n FROM walkins WHERE DATE(trigger_date) BETWEEN ? AND ? ${c.sql}`,
+    `SELECT COUNT(*) AS n FROM walkins WHERE trigger_date::date BETWEEN ? AND ? ${c.sql}`,
     [from, to, ...c.params]
   );
   return Number(row?.n || 0);
@@ -133,7 +133,7 @@ async function countAlerts(pool, from, to, through, codes = null) {
   const c = cap(through);
   const codeSql = codes?.length ? ` AND alert_type IN (${codes.map(() => "?").join(",")}) ` : "";
   const [[row]] = await pool.query(
-    `SELECT COUNT(*) AS n FROM crowds WHERE DATE(trigger_date) BETWEEN ? AND ? ${c.sql} ${codeSql}`,
+    `SELECT COUNT(*) AS n FROM crowds WHERE trigger_date::date BETWEEN ? AND ? ${c.sql} ${codeSql}`,
     [from, to, ...c.params, ...(codes || [])]
   );
   return Number(row?.n || 0);
@@ -143,7 +143,7 @@ async function alertsByType(pool, from, to, through) {
   const c = cap(through);
   const [rows] = await pool.query(
     `SELECT alert_type, COUNT(*) AS n FROM crowds
-     WHERE DATE(trigger_date) BETWEEN ? AND ? ${c.sql}
+     WHERE trigger_date::date BETWEEN ? AND ? ${c.sql}
      GROUP BY alert_type`,
     [from, to, ...c.params]
   );
@@ -159,8 +159,8 @@ async function alertsByType(pool, from, to, through) {
 async function hourlyAlerts(pool, from, to, through) {
   const c = cap(through);
   const [rows] = await pool.query(
-    `SELECT HOUR(trigger_date) AS h, COUNT(*) AS n FROM crowds
-     WHERE DATE(trigger_date) BETWEEN ? AND ? ${c.sql}
+    `SELECT EXTRACT(HOUR FROM trigger_date)::int AS h, COUNT(*) AS n FROM crowds
+     WHERE trigger_date::date BETWEEN ? AND ? ${c.sql}
      GROUP BY h ORDER BY h ASC`,
     [from, to, ...c.params]
   );
@@ -172,7 +172,7 @@ async function groupByCamera(pool, table, from, to, through) {
   const c = cap(through);
   const [rows] = await pool.query(
     `SELECT camera_id, COUNT(*) AS n FROM \`${table}\`
-     WHERE DATE(trigger_date) BETWEEN ? AND ? ${c.sql}
+     WHERE trigger_date::date BETWEEN ? AND ? ${c.sql}
      GROUP BY camera_id ORDER BY n DESC`,
     [from, to, ...c.params]
   );
@@ -187,7 +187,7 @@ async function walkinsByGender(pool, from, to, through) {
   const c = cap(through);
   const [rows] = await pool.query(
     `SELECT gender, COUNT(*) AS n FROM walkins
-     WHERE DATE(trigger_date) BETWEEN ? AND ? ${c.sql}
+     WHERE trigger_date::date BETWEEN ? AND ? ${c.sql}
      GROUP BY gender`,
     [from, to, ...c.params]
   );
@@ -202,8 +202,8 @@ async function walkinsByGender(pool, from, to, through) {
 async function peakWalkinHour(pool, from, to, through) {
   const c = cap(through);
   const [rows] = await pool.query(
-    `SELECT HOUR(trigger_date) AS h, COUNT(*) AS n FROM walkins
-     WHERE DATE(trigger_date) BETWEEN ? AND ? ${c.sql}
+    `SELECT EXTRACT(HOUR FROM trigger_date)::int AS h, COUNT(*) AS n FROM walkins
+     WHERE trigger_date::date BETWEEN ? AND ? ${c.sql}
      GROUP BY h ORDER BY n DESC, h ASC LIMIT 1`,
     [from, to, ...c.params]
   );

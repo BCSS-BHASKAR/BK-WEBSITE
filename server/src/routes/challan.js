@@ -270,10 +270,10 @@ router.post("/flag", limiter, async (req, res) => {
       `
       INSERT INTO violation_ticket_flags (violation_id, flag, challan_id)
       VALUES (?, ?, ?)
-      ON DUPLICATE KEY UPDATE
-        flag = VALUES(flag),
-        challan_id = VALUES(challan_id),
-        updated_at = CURRENT_TIMESTAMP
+      ON CONFLICT (violation_id) DO UPDATE SET
+        flag = EXCLUDED.flag,
+        challan_id = EXCLUDED.challan_id,
+        updated_at = LOCALTIMESTAMP
     `,
       [violationId, flag, Number.isFinite(challanId) ? challanId : null]
     );
@@ -348,10 +348,10 @@ router.post("/create", limiter, async (req, res) => {
         `
         INSERT INTO violation_ticket_flags (violation_id, flag, challan_id)
         VALUES (?, 1, ?)
-        ON DUPLICATE KEY UPDATE
+        ON CONFLICT (violation_id) DO UPDATE SET
           flag = 1,
-          challan_id = VALUES(challan_id),
-          updated_at = CURRENT_TIMESTAMP
+          challan_id = EXCLUDED.challan_id,
+          updated_at = LOCALTIMESTAMP
       `,
         [Number(violationId), challan.id]
       );

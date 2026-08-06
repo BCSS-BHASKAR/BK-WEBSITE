@@ -1,7 +1,7 @@
 -- ---------------------------------------------------------------------------
 -- Production migration — run BEFORE deploying this build.
 --
---   mysql -u <user> -p <database> < server/sql/2026-07-alert-type-and-gender.sql
+--   psql -U <user> -d <database> -f server/sql/2026-07-alert-type-and-gender.sql
 --
 -- Adds the two columns the new Alerts and Walk-ins screens depend on:
 --
@@ -19,61 +19,87 @@
 --   GET /api/dashboard/walkins-report-events
 --
 -- Both columns are NOT NULL with a safe default, so existing rows stay valid and
--- inserts that do not mention them keep working. Neither ALTER rewrites data, but
--- both take a metadata lock — run them in a low-traffic window on a large table.
+-- inserts that do not mention them keep working. On PostgreSQL 11+ neither ADD
+-- COLUMN rewrites the table, but both take an ACCESS EXCLUSIVE lock — run them
+-- in a low-traffic window on a large table. The CHECK constraints are added
+-- separately as NOT VALID + VALIDATE so the validation scan only needs a SHARE
+-- UPDATE EXCLUSIVE lock.
+--
+-- The MySQL build used ENUM columns; here they are VARCHAR + CHECK, which reads
+-- back identically in the API and is far cheaper to extend later.
 --
 -- IMPORTANT: after this migration the inference pipeline must start WRITING these
 -- columns. Until it does, every new crowd alert lands as 'intrusion' and every
 -- walk-in as 'unknown', so the tiles and donut will look one-sided.
 -- ---------------------------------------------------------------------------
 
+BEGIN;
+
 -- --------------------------------------------------------------------------
 -- 1. crowds.alert_type
+--
+-- Postgres has no AFTER <column>; column order is not part of the contract.
 -- --------------------------------------------------------------------------
 
-ALTER TABLE `crowds`
-  ADD COLUMN `alert_type`
-    ENUM('intrusion','unauthorized_access','camera_tampering','unattended_kitchen','understaffed_kitchen')
-    NOT NULL DEFAULT 'intrusion' AFTER `camera_id`,
-  ADD KEY `idx_crowds_alert_type` (`alert_type`);
+ALTER TABLE crowds
+  ADD COLUMN IF NOT EXISTS alert_type VARCHAR(32) NOT NULL DEFAULT 'intrusion';
 
--- If an earlier build of this migration already ran, the column exists with the
--- old three values ('intrusion','chef','camera_tampering'). Run this block
--- instead of the ALTER above to bring it up to date without losing rows.
---
--- ALTER TABLE `crowds`
---   MODIFY COLUMN `alert_type`
---     ENUM('intrusion','chef','unauthorized_access','camera_tampering',
---          'unattended_kitchen','understaffed_kitchen')
---     NOT NULL DEFAULT 'intrusion';
--- UPDATE `crowds` SET alert_type = 'understaffed_kitchen' WHERE alert_type = 'chef';
--- ALTER TABLE `crowds`
---   MODIFY COLUMN `alert_type`
---     ENUM('intrusion','unauthorized_access','camera_tampering',
---          'unattended_kitchen','understaffed_kitchen')
---     NOT NULL DEFAULT 'intrusion';
+ALTER TABLE crowds
+  DROP CONSTRAINT IF EXISTS ck_crowds_alert_type;
+
+ALTER TABLE crowds
+  ADD CONSTRAINT ck_crowds_alert_type CHECK (alert_type IN
+    ('intrusion','unauthorized_access','camera_tampering','unattended_kitchen','understaffed_kitchen'))
+  NOT VALID;
 
 -- --------------------------------------------------------------------------
 -- 2. walkins.gender
 -- --------------------------------------------------------------------------
 
-ALTER TABLE `walkins`
-  ADD COLUMN `gender` ENUM('male','female','unknown')
-    NOT NULL DEFAULT 'unknown' AFTER `camera_id`,
-  ADD KEY `idx_walkins_gender` (`gender`);
+ALTER TABLE walkins
+  ADD COLUMN IF NOT EXISTS gender VARCHAR(16) NOT NULL DEFAULT 'unknown';
+
+ALTER TABLE walkins
+  DROP CONSTRAINT IF EXISTS ck_walkins_gender;
+
+ALTER TABLE walkins
+  ADD CONSTRAINT ck_walkins_gender CHECK (gender IN ('male','female','unknown'))
+  NOT VALID;
+
+COMMIT;
+
+-- --------------------------------------------------------------------------
+-- If an earlier build of this migration already ran, alert_type exists with the
+-- old three values ('intrusion','chef','camera_tampering'). Fold 'chef' into
+-- 'understaffed_kitchen' BEFORE validating the constraint above.
+--
+-- UPDATE crowds SET alert_type = 'understaffed_kitchen' WHERE alert_type = 'chef';
+-- --------------------------------------------------------------------------
+
+-- Validation scans the table but only takes SHARE UPDATE EXCLUSIVE, so reads
+-- and writes keep flowing. Safe to run separately from the transaction above.
+ALTER TABLE crowds  VALIDATE CONSTRAINT ck_crowds_alert_type;
+ALTER TABLE walkins VALIDATE CONSTRAINT ck_walkins_gender;
+
+CREATE INDEX IF NOT EXISTS idx_crowds_alert_type ON crowds (alert_type);
+CREATE INDEX IF NOT EXISTS idx_walkins_gender    ON walkins (gender);
 
 -- --------------------------------------------------------------------------
 -- Verification
 -- --------------------------------------------------------------------------
 
-SELECT alert_type, COUNT(*) AS rows_by_type FROM `crowds`  GROUP BY alert_type;
-SELECT gender,     COUNT(*) AS rows_by_gender FROM `walkins` GROUP BY gender;
+SELECT alert_type, COUNT(*) AS rows_by_type   FROM crowds  GROUP BY alert_type;
+SELECT gender,     COUNT(*) AS rows_by_gender FROM walkins GROUP BY gender;
 
 -- ---------------------------------------------------------------------------
 -- Rollback (only if you need to revert the deploy)
 -- ---------------------------------------------------------------------------
--- ALTER TABLE `crowds`  DROP KEY `idx_crowds_alert_type`,  DROP COLUMN `alert_type`;
--- ALTER TABLE `walkins` DROP KEY `idx_walkins_gender`,     DROP COLUMN `gender`;
+-- ALTER TABLE crowds  DROP CONSTRAINT IF EXISTS ck_crowds_alert_type;
+-- ALTER TABLE walkins DROP CONSTRAINT IF EXISTS ck_walkins_gender;
+-- DROP INDEX IF EXISTS idx_crowds_alert_type;
+-- DROP INDEX IF EXISTS idx_walkins_gender;
+-- ALTER TABLE crowds  DROP COLUMN IF EXISTS alert_type;
+-- ALTER TABLE walkins DROP COLUMN IF EXISTS gender;
 
 -- ---------------------------------------------------------------------------
 -- DO NOT RUN IN PRODUCTION — local demo seeding only.
@@ -82,14 +108,16 @@ SELECT gender,     COUNT(*) AS rows_by_gender FROM `walkins` GROUP BY gender;
 -- realistic spread. On real data they would destroy genuine classifications.
 -- ---------------------------------------------------------------------------
 --
--- UPDATE `crowds` SET alert_type = ELT(FLOOR(RAND() * 20) + 1,
+-- UPDATE crowds SET alert_type = (ARRAY[
 --   'intrusion','intrusion','intrusion','intrusion','intrusion',
 --   'intrusion','intrusion','intrusion','intrusion','intrusion',
 --   'understaffed_kitchen','understaffed_kitchen','understaffed_kitchen','understaffed_kitchen',
 --   'unattended_kitchen','unattended_kitchen','unattended_kitchen',
---   'camera_tampering','camera_tampering','camera_tampering');
+--   'camera_tampering','camera_tampering','camera_tampering'
+-- ])[(FLOOR(RANDOM() * 20) + 1)::int];
 --
--- UPDATE `walkins` SET gender = ELT(FLOOR(RAND() * 20) + 1,
+-- UPDATE walkins SET gender = (ARRAY[
 --   'male','male','male','male','male','male','male','male','male','male','male',
 --   'female','female','female','female','female','female','female',
---   'unknown','unknown');
+--   'unknown','unknown'
+-- ])[(FLOOR(RANDOM() * 20) + 1)::int];

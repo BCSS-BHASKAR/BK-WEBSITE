@@ -1,7 +1,7 @@
 const { getCameraMap, normalizeCameraId, resolveCameraName } = require("./cameras");
 const CAMERA_MAP = getCameraMap();
 const { SITE_CONFIG } = require("./config/siteConfig");
-const { evEventDatetimeExpr, evManilaDate, evManilaHour, evManilaYmdFmt } = require("./eventTimeSql");
+const { epochMillis, evManilaDate, evManilaHour, evManilaYmdFmt } = require("./eventTimeSql");
 const { ymdSite, eachHourSlotInRange } = require("./siteTimeZone");
 
 const evD = evManilaDate("created_at", null);
@@ -16,15 +16,14 @@ function staleMinutesFromConfig() {
 async function loadCameraLiveStatus(pool) {
   const staleMinutes = staleMinutesFromConfig();
   const cutoffMs = Date.now() - staleMinutes * 60 * 1000;
-  const dtExpr = evEventDatetimeExpr("created_at", "timestamp");
 
   const [rows] = await pool.query(
     `
     SELECT camera_id,
       MAX(
         CASE
-          WHEN timestamp > 0 THEN timestamp
-          ELSE UNIX_TIMESTAMP(${dtExpr}) * 1000
+          WHEN "timestamp" > 0 THEN "timestamp"
+          ELSE ${epochMillis("created_at")}
         END
       ) AS last_ms
     FROM vehicle_events

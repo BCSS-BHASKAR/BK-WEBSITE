@@ -1,60 +1,80 @@
 const fs = require("fs");
 const path = require("path");
-const mysql = require("mysql2/promise");
+const { Client } = require("pg");
 require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
 
+function quoteIdent(name) {
+  return `"${String(name).replace(/"/g, '""')}"`;
+}
+
+function quoteLiteral(value) {
+  return `'${String(value).replace(/'/g, "''")}'`;
+}
+
+// The .sql files are already PostgreSQL-native, so they go straight to a raw
+// pg Client rather than through the mysql2-compatibility shim in db.js.
 async function initDb() {
   const host = process.env.DB_HOST || "127.0.0.1";
-  const port = Number(process.env.DB_PORT || 3306);
+  const port = Number(process.env.DB_PORT || 5432);
   const dbUser = process.env.DB_USER || "aiserver";
   const dbPass = process.env.DB_PASSWORD || "aiserver";
   const dbName = process.env.DB_NAME || "aiserver";
 
-  console.log(`Connecting to MySQL at ${host}:${port}...`);
-  
-  // Attempt connection as root first to create database and user if needed
+  const adminUser = process.env.DB_ADMIN_USER || "postgres";
+  const adminPass = process.env.DB_ADMIN_PASSWORD || "";
+  const adminDb = process.env.DB_ADMIN_DB || "postgres";
+
+  console.log(`Connecting to PostgreSQL at ${host}:${port}...`);
+
+  // Attempt connection as a superuser first to create the role and database.
+  // Postgres has no CREATE {DATABASE,ROLE} IF NOT EXISTS, and CREATE DATABASE
+  // cannot run inside a transaction, so each is guarded by a catalogue lookup.
   try {
-    const rootConn = await mysql.createConnection({ host, port, user: "root", password: "", multipleStatements: true });
-    console.log("Connected to MySQL as root without password.");
-    await rootConn.query(`CREATE DATABASE IF NOT EXISTS \`${dbName}\`;`);
-    await rootConn.query(`CREATE USER IF NOT EXISTS '${dbUser}'@'%' IDENTIFIED BY '${dbPass}';`);
-    await rootConn.query(`GRANT ALL PRIVILEGES ON \`${dbName}\`.* TO '${dbUser}'@'%';`);
-    await rootConn.query(`CREATE USER IF NOT EXISTS '${dbUser}'@'localhost' IDENTIFIED BY '${dbPass}';`);
-    await rootConn.query(`GRANT ALL PRIVILEGES ON \`${dbName}\`.* TO '${dbUser}'@'localhost';`);
-    await rootConn.query(`FLUSH PRIVILEGES;`);
-    await rootConn.end();
-    console.log(`Ensured database '${dbName}' and user '${dbUser}' exist.`);
+    const admin = new Client({ host, port, user: adminUser, password: adminPass, database: adminDb });
+    await admin.connect();
+    console.log(`Connected to PostgreSQL as '${adminUser}'.`);
+
+    const { rows: roles } = await admin.query("SELECT 1 FROM pg_roles WHERE rolname = $1", [dbUser]);
+    if (!roles.length) {
+      await admin.query(`CREATE ROLE ${quoteIdent(dbUser)} LOGIN PASSWORD ${quoteLiteral(dbPass)}`);
+      console.log(`Created role '${dbUser}'.`);
+    }
+
+    const { rows: dbs } = await admin.query("SELECT 1 FROM pg_database WHERE datname = $1", [dbName]);
+    if (!dbs.length) {
+      await admin.query(`CREATE DATABASE ${quoteIdent(dbName)} OWNER ${quoteIdent(dbUser)}`);
+      console.log(`Created database '${dbName}'.`);
+    }
+
+    await admin.query(`GRANT ALL PRIVILEGES ON DATABASE ${quoteIdent(dbName)} TO ${quoteIdent(dbUser)}`);
+    await admin.end();
+    console.log(`Ensured database '${dbName}' and role '${dbUser}' exist.`);
   } catch (err) {
-    console.log("Root pre-step info (attempting direct target login):", err.message);
+    console.log("Superuser pre-step info (attempting direct target login):", err.message);
   }
 
-  // Connect to target database and run seed scripts
-  const targetConn = await mysql.createConnection({
-    host,
-    port,
-    user: dbUser,
-    password: dbPass,
-    database: dbName,
-    multipleStatements: true,
-  });
+  // Connect to target database and run seed scripts.
+  const target = new Client({ host, port, user: dbUser, password: dbPass, database: dbName });
+  await target.connect();
 
-  console.log(`Connected to database '${dbName}' as user '${dbUser}'. Seeding tables and data...`);
-
-  const devBootstrapPath = path.join(__dirname, "..", "sql", "dev_bootstrap.sql");
-  if (fs.existsSync(devBootstrapPath)) {
-    const devBootstrapSql = fs.readFileSync(devBootstrapPath, "utf8");
-    await targetConn.query(devBootstrapSql);
-    console.log("[DB] Seeded dev_bootstrap.sql successfully.");
+  // The role needs to create objects in the public schema; on PostgreSQL 15+
+  // public is no longer writable by every role by default.
+  try {
+    await target.query(`GRANT ALL ON SCHEMA public TO ${quoteIdent(dbUser)}`);
+  } catch (err) {
+    console.log("Schema grant skipped:", err.message);
   }
 
-  const auditSqlPath = path.join(__dirname, "..", "sql", "assistant_chat_audit.sql");
-  if (fs.existsSync(auditSqlPath)) {
-    const auditSql = fs.readFileSync(auditSqlPath, "utf8");
-    await targetConn.query(auditSql);
-    console.log("[DB] Seeded assistant_chat_audit.sql successfully.");
+  console.log(`Connected to database '${dbName}' as role '${dbUser}'. Seeding tables and data...`);
+
+  for (const file of ["dev_bootstrap.sql", "assistant_chat_audit.sql"]) {
+    const full = path.join(__dirname, "..", "sql", file);
+    if (!fs.existsSync(full)) continue;
+    await target.query(fs.readFileSync(full, "utf8"));
+    console.log(`[DB] Seeded ${file} successfully.`);
   }
 
-  await targetConn.end();
+  await target.end();
   console.log("Database initialization complete!");
 }
 

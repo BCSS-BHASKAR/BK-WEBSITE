@@ -375,7 +375,7 @@ async function repeatOffendersInRange(pool, from, to, limit = 10) {
       SELECT
         ve.vehicle_num AS plate,
         COUNT(*) AS violation_count,
-        SUBSTRING_INDEX(GROUP_CONCAT(tv.violation_type ORDER BY ve.created_at DESC), ',', 1) AS latest_type
+        (ARRAY_AGG(tv.violation_type ORDER BY ve.created_at DESC))[1] AS latest_type
       FROM traffic_violations tv
       JOIN vehicle_events ve ON ve.event_id = tv.event_id
       WHERE ${evDve} BETWEEN ? AND ?
@@ -525,7 +525,7 @@ async function countWatchlistHits(pool, from, to, throughDateTime = null) {
   const cap = timeCapSql(evExpr, throughDateTime);
   const params = [from, to, ...cap.params];
   try {
-    const [[tVe]] = await pool.query("SHOW TABLES LIKE 'vehicle_events'");
+    const [[tVe]] = await pool.query("SELECT 1 AS ok WHERE to_regclass('vehicle_events') IS NOT NULL");
     if (!tVe) return 0;
     const { matchers } = await loadWatchPlateMatchers(pool);
     if (!matchers.length) return 0;

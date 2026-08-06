@@ -3,6 +3,7 @@ const { pool } = require("../db");
 const { loadMergedCameraMap, resolveCameraName, normalizeCameraId, listCameraRegistry } = require("../cameras");
 const { evManilaDate, evManilaDateTimeFmt } = require("../eventTimeSql");
 const {
+  buildConditions,
   buildRuleConditions,
   mapRuleRow,
   parseConditions,
@@ -52,7 +53,7 @@ router.get("/rules", async (req, res) => {
 
   const name = String(req.query.name || req.query.rule_name || "").trim();
   if (name) {
-    where.push("r.name LIKE ?");
+    where.push("r.name ILIKE ?");
     params.push(`%${name}%`);
   }
   if (req.query.site_id) {
@@ -61,11 +62,11 @@ router.get("/rules", async (req, res) => {
   }
   const cameraId = String(req.query.camera_id || "").trim();
   if (cameraId) {
-    where.push("r.conditions LIKE ?");
+    where.push("r.conditions ILIKE ?");
     params.push(`%"${cameraId.replace(/"/g, '\\"')}"%`);
   }
   if (req.query.filter_type) {
-    where.push("r.filterType = ?");
+    where.push('r."filterType" = ?');
     params.push(req.query.filter_type);
   }
   if (req.query.access_type) {
@@ -140,8 +141,9 @@ router.post("/rules", async (req, res) => {
     const siteId = body.site_id ?? 1;
     const [result] = await pool.query(
       `INSERT INTO lpr_rules
-        (enabled, barrierOpen, filterType, vehicleListIds, name, access_type, security_type, priority, site_id, conditions, notes, valid_from, valid_to, created_at, updated_at)
-       VALUES (1, 0, 'plate', ?, ?, ?, ?, 10, ?, ?, ?, ?, ?, NOW(), NOW())`,
+        (enabled, "barrierOpen", "filterType", "vehicleListIds", name, access_type, security_type, priority, site_id, conditions, notes, valid_from, valid_to, created_at, updated_at)
+       VALUES (1, 0, 'plate', ?, ?, ?, ?, 10, ?, ?, ?, ?, ?, LOCALTIMESTAMP, LOCALTIMESTAMP)
+       RETURNING id`,
       [
         vehicleListIds,
         body.name,
@@ -171,8 +173,8 @@ router.put("/rules/:id", async (req, res) => {
     const conditions = JSON.stringify(buildRuleConditions(body.condition_rows, cameraIds));
     await pool.query(
       `UPDATE lpr_rules SET
-        filterType = 'plate', vehicleListIds = ?, name = ?, access_type = ?, security_type = ?,
-        site_id = ?, conditions = ?, notes = ?, valid_from = ?, valid_to = ?, updated_at = NOW()
+        "filterType" = 'plate', "vehicleListIds" = ?, name = ?, access_type = ?, security_type = ?,
+        site_id = ?, conditions = ?, notes = ?, valid_from = ?, valid_to = ?, updated_at = LOCALTIMESTAMP
        WHERE id = ?`,
       [
         '""',
@@ -213,7 +215,7 @@ router.get("/vehicle-lists", async (req, res) => {
   const params = [];
   const name = String(req.query.name || "").trim();
   if (name) {
-    where.push("l.name LIKE ?");
+    where.push("l.name ILIKE ?");
     params.push(`%${name}%`);
   }
   if (req.query.site_id) {
@@ -258,7 +260,8 @@ router.post("/vehicle-lists", async (req, res) => {
   try {
     const now = Math.floor(Date.now() / 1000);
     const [result] = await pool.query(
-      `INSERT INTO lpr_vehicle_lists (enabled, name, notes, site_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO lpr_vehicle_lists (enabled, name, notes, site_id, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?) RETURNING id`,
       [enabled ? 1 : 0, name, notes ?? null, site_id, now, now]
     );
     res.status(201).json({ id: result.insertId });
@@ -332,7 +335,8 @@ router.post("/vehicle-lists/:id/entries", async (req, res) => {
   if (!built.length) return res.status(400).json({ error: "bad_request", message: "At least one condition required" });
   try {
     const [result] = await pool.query(
-      `INSERT INTO lpr_vehicle_list_vehicles (vehicle_list_id, conditions, created_at, updated_at) VALUES (?, ?, NOW(), NOW())`,
+      `INSERT INTO lpr_vehicle_list_vehicles (vehicle_list_id, conditions, created_at, updated_at)
+       VALUES (?, ?, LOCALTIMESTAMP, LOCALTIMESTAMP) RETURNING id`,
       [req.params.id, JSON.stringify(built)]
     );
     res.status(201).json({ id: result.insertId });
@@ -345,7 +349,7 @@ router.post("/vehicle-lists/:id/entries", async (req, res) => {
 router.put("/entries/:id", async (req, res) => {
   const built = buildConditions(req.body?.condition_rows);
   try {
-    await pool.query(`UPDATE lpr_vehicle_list_vehicles SET conditions = ?, updated_at = NOW() WHERE id = ?`, [
+    await pool.query(`UPDATE lpr_vehicle_list_vehicles SET conditions = ?, updated_at = LOCALTIMESTAMP WHERE id = ?`, [
       JSON.stringify(built),
       req.params.id,
     ]);
@@ -375,10 +379,10 @@ router.get("/hits", async (req, res) => {
 
   try {
     if ((source === "all" || source === "triggers") && (await tableExists(pool, "rule_event_triggers"))) {
-      const where = ["DATE(ret.trigger_date) BETWEEN ? AND ?"];
+      const where = ["ret.trigger_date::date BETWEEN ? AND ?"];
       const params = [range.from, range.to];
       if (req.query.plate) {
-        where.push("e.lp LIKE ?");
+        where.push("e.lp ILIKE ?");
         params.push(`%${req.query.plate}%`);
       }
       if (req.query.rule_name) {

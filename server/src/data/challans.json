@@ -1,6 +1,66 @@
 {
   "rows": [
     {
+      "id": 11,
+      "createdAt": "2026-08-06T09:45:34.282Z",
+      "updatedAt": "2026-08-06T09:45:34.282Z",
+      "status": "draft",
+      "sendResult": null,
+      "plate": "ZZZ9999",
+      "violationType": "NO_HELMET",
+      "amount": 500,
+      "siteName": null,
+      "cameraId": null,
+      "detectedAt": null,
+      "proofUrl": null,
+      "offenses": [
+        "OVERLOADING"
+      ],
+      "offenseLabels": [
+        "Overloading"
+      ],
+      "othersText": null,
+      "accident": "no",
+      "paymentStatus": "unpaid",
+      "penaltyType": "first_offense",
+      "ownerEmail": "a@b.com",
+      "ownerName": null,
+      "ownerPhone": null,
+      "ownerAddress": null,
+      "source": "manual",
+      "violationId": 295
+    },
+    {
+      "id": 10,
+      "createdAt": "2026-08-06T09:39:42.449Z",
+      "updatedAt": "2026-08-06T09:39:42.449Z",
+      "status": "draft",
+      "sendResult": null,
+      "plate": "TEST0002",
+      "violationType": "NO_HELMET",
+      "amount": 500,
+      "siteName": null,
+      "cameraId": null,
+      "detectedAt": null,
+      "proofUrl": null,
+      "offenses": [
+        "OVERLOADING"
+      ],
+      "offenseLabels": [
+        "Overloading"
+      ],
+      "othersText": null,
+      "accident": "no",
+      "paymentStatus": "unpaid",
+      "penaltyType": "first_offense",
+      "ownerEmail": "a@b.com",
+      "ownerName": null,
+      "ownerPhone": null,
+      "ownerAddress": null,
+      "source": "manual",
+      "violationId": 2
+    },
+    {
       "id": 9,
       "createdAt": "2026-07-23T07:12:14.526Z",
       "updatedAt": "2026-07-23T07:12:16.301Z",

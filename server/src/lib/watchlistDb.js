@@ -154,7 +154,9 @@ function mapRuleRow(r, siteName, cameraNameMap = null) {
 }
 
 async function tableExists(pool, name) {
-  const [[row]] = await pool.query("SHOW TABLES LIKE ?", [name]);
+  // Postgres has no SHOW TABLES; to_regclass() returns NULL when the relation
+  // is absent, and the WHERE keeps the "0 or 1 rows" shape the caller expects.
+  const [[row]] = await pool.query("SELECT 1 AS ok WHERE to_regclass(?) IS NOT NULL", [name]);
   return Boolean(row);
 }
 
