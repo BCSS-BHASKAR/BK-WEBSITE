@@ -35,8 +35,15 @@ import { useAutoRefreshMs } from "../lib/useAppSettings";
 // Everything the page tracks, alerts first. chef_absence is included: it is an
 // alert module (the cooking station was left unmanned), and omitting it would
 // repeat the bug where a new module is invisible everywhere but its own page.
+//
+// kitchen_unattended is deliberately absent. It asks the same operational
+// question as chef_absence - was the line left uncovered - and chef_absence is
+// the detector actually recording at this site, so carrying both put a
+// permanent zero next to the real figure and split one concern across two
+// tiles. The module and its route stay live; it is only dropped from this
+// page's tiles, bars and Alert type filter.
 const ALERT_MODULES: InferenceModuleKey[] = [
-  "intrusion", "loitering", "after_hours", "kitchen_unattended", "chef_absence",
+  "intrusion", "loitering", "after_hours", "chef_absence",
 ];
 // Walk-ins are tracked and displayed, but never counted as an alert.
 const CONTEXT_MODULES: InferenceModuleKey[] = ["walkins"];
