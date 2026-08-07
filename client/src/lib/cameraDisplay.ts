@@ -25,7 +25,7 @@ export function locationDotColor(name?: string | null, cameraId?: string | null)
   if (label.includes("front")) return "#7E3F5B";
   if (label.includes("kitchen")) return "#EA580C";
   if (label.includes("entrance")) return "#22C55E";
-  if (label.includes("rear") || label.includes("back")) return "#C08529";
+  if (label.includes("rear") || label.includes("back")) return "#B8860B";
   return "#A8968A";
 }
 

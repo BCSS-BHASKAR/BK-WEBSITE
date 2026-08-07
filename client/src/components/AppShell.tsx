@@ -304,9 +304,7 @@ function AppShellInner() {
             sx={{
               px: 2, pt: 1.5, pb: 0.5, fontSize: 10, fontWeight: 800,
               letterSpacing: "0.09em", textTransform: "uppercase",
-              // 0.7, not the 0.45 this caption used to carry: against the brand
-              // green that read at 2.9:1, under the 4.5:1 floor for small text.
-              color: "rgba(248,250,252,0.7)",
+              color: "rgba(248,250,252,0.45)",
             }}
           >
             {n.group}

@@ -2,13 +2,13 @@
 
 const base = import.meta.env.BASE_URL;
 
-export const loginNavy = "#243117";
+export const loginNavy = "#2B0810";
 
 export const LOGIN_HERO_IMAGE = `${base}LoginHero.jpg`;
 export const LOGIN_FLAG_IMAGE = `${base}LoginFlag.png`;
 
 export const loginPanelBg =
-  "radial-gradient(ellipse 100% 55% at 12% 0%, rgba(217, 174, 69, 0.18) 0%, transparent 52%), radial-gradient(ellipse 70% 45% at 92% 100%, rgba(194, 65, 12, 0.14) 0%, transparent 48%), linear-gradient(165deg, #243117 0%, #3E5626 42%, #2C3D1B 100%)";
+  "radial-gradient(ellipse 100% 55% at 12% 0%, rgba(217, 174, 69, 0.18) 0%, transparent 52%), radial-gradient(ellipse 70% 45% at 92% 100%, rgba(194, 65, 12, 0.14) 0%, transparent 48%), linear-gradient(165deg, #2B0810 0%, #4A1220 42%, #3B0E1B 100%)";
 
 export const loginGlassCard = {
   bgcolor: "rgba(255, 255, 255, 0.9)",
@@ -30,7 +30,7 @@ export const loginMiniCard = {
 export const loginHeroBackground = {
   position: "relative" as const,
   overflow: "hidden" as const,
-  bgcolor: "#2C3D1B",
+  bgcolor: "#3B0E1B",
 };
 
 export const loginFutureMuted = "#94A3B8";

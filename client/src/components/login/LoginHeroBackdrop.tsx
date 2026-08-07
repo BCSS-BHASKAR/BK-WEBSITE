@@ -23,7 +23,7 @@ export function LoginHeroBackdrop() {
           background: `
             radial-gradient(ellipse 80% 60% at 78% 12%, rgba(217, 174, 69, 0.20) 0%, transparent 55%),
             radial-gradient(ellipse 65% 50% at 15% 90%, rgba(126, 63, 91, 0.28) 0%, transparent 55%),
-            linear-gradient(155deg, #2C3D1B 0%, #243117 48%, #141B0C 100%)
+            linear-gradient(155deg, #3B0E1B 0%, #2B0810 48%, #1C050B 100%)
           `,
         }}
       />

@@ -17,14 +17,15 @@ import { SITE_TIMEZONE } from "./siteTimeZone";
  * Page geometry is declared once in PAGE below and nothing draws outside it.
  */
 
-// Brand palette, matching pnpTheme (Biryani Katha green / mustard).
-const GREEN: [number, number, number] = [62, 86, 38];
-const GREEN_DEEP: [number, number, number] = [44, 61, 27];
-const MUSTARD: [number, number, number] = [192, 133, 41];
-const CREAM: [number, number, number] = [250, 221, 157];
-const INK: [number, number, number] = [31, 42, 22];
-const INK_SOFT: [number, number, number] = [95, 107, 82];
-const RULE: [number, number, number] = [214, 219, 206];
+// Report palette, matching pnpTheme: pnp.navy for the cover and table heads,
+// pnp.primary for rules and accents, pnp.text / pnp.textSecondary for copy.
+const NAVY: [number, number, number] = [74, 18, 32];        // pnp.navy   #4A1220
+const NAVY_DEEP: [number, number, number] = [59, 14, 27];   // pnp.footerBg #3B0E1B
+const GOLD: [number, number, number] = [184, 134, 11];      // pnp.primary #B8860B
+const GOLD_SOFT: [number, number, number] = [242, 214, 138]; // pnp.navActiveBar #F2D68A
+const INK: [number, number, number] = [42, 26, 18];         // pnp.text   #2A1A12
+const INK_SOFT: [number, number, number] = [122, 100, 85];  // pnp.textSecondary #7A6455
+const RULE: [number, number, number] = [226, 218, 210];
 
 const PAGE = {
   w: 210,
@@ -69,7 +70,7 @@ function decoratePages(doc: Doc, data: DailyBriefingData, title: string) {
     // Running header: report name left, period right, rule underneath.
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8.5);
-    doc.setTextColor(...GREEN);
+    doc.setTextColor(...NAVY);
     doc.text(title.toUpperCase(), PAGE.margin, PAGE.margin + 4);
     doc.setFont("helvetica", "normal");
     doc.setTextColor(...INK_SOFT);
@@ -117,14 +118,14 @@ class Flow {
     this.y += h;
   }
 
-  /** Section heading with a mustard underline. Never orphaned from its body. */
+  /** Section heading with a gold underline. Never orphaned from its body. */
   heading(text: string, minBodyHeight = 12) {
     this.need(9 + minBodyHeight);
     this.doc.setFont("helvetica", "bold");
     this.doc.setFontSize(12);
-    this.doc.setTextColor(...GREEN_DEEP);
+    this.doc.setTextColor(...NAVY_DEEP);
     this.doc.text(text, PAGE.margin, this.y);
-    this.doc.setDrawColor(...MUSTARD);
+    this.doc.setDrawColor(...GOLD);
     this.doc.setLineWidth(0.8);
     this.doc.line(PAGE.margin, this.y + 1.6, PAGE.margin + 22, this.y + 1.6);
     this.y += 8;
@@ -161,7 +162,7 @@ class Flow {
     lines.forEach((line, i) => {
       this.need(5);
       if (i === 0) {
-        this.doc.setFillColor(...MUSTARD);
+        this.doc.setFillColor(...GOLD);
         this.doc.circle(PAGE.margin + 1.2, this.y - 1.2, 0.9, "F");
       }
       this.doc.text(line, PAGE.margin + 5, this.y);
@@ -191,8 +192,8 @@ class Flow {
         lineWidth: 0.1,
         valign: "middle",
       },
-      headStyles: { fillColor: GREEN, textColor: [255, 255, 255], fontStyle: "bold", fontSize: 8.5 },
-      alternateRowStyles: { fillColor: [248, 249, 245] },
+      headStyles: { fillColor: NAVY, textColor: [255, 255, 255], fontStyle: "bold", fontSize: 8.5 },
+      alternateRowStyles: { fillColor: [250, 247, 242] },
       columnStyles,
       margin: { left: PAGE.margin, right: PAGE.margin, top: PAGE.top, bottom: PAGE.h - PAGE.bottom },
       tableWidth: CONTENT_W,
@@ -202,12 +203,12 @@ class Flow {
 }
 
 function addCover(doc: Doc, data: DailyBriefingData, title: string) {
-  doc.setFillColor(...GREEN);
+  doc.setFillColor(...NAVY);
   doc.rect(0, 0, PAGE.w, PAGE.h, "F");
 
   // Inset cream keyline, so the cover reads as a designed page rather than a
   // flat fill.
-  doc.setDrawColor(...CREAM);
+  doc.setDrawColor(...GOLD_SOFT);
   doc.setLineWidth(0.6);
   doc.rect(12, 12, PAGE.w - 24, PAGE.h - 24);
 
@@ -216,13 +217,13 @@ function addCover(doc: Doc, data: DailyBriefingData, title: string) {
   doc.setFontSize(24);
   doc.text(title, PAGE.w / 2, 96, { align: "center", maxWidth: PAGE.w - 50 });
 
-  doc.setDrawColor(...MUSTARD);
+  doc.setDrawColor(...GOLD);
   doc.setLineWidth(1.2);
   doc.line(PAGE.w / 2 - 18, 104, PAGE.w / 2 + 18, 104);
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10.5);
-  doc.setTextColor(...CREAM);
+  doc.setTextColor(...GOLD_SOFT);
   doc.text("INTELLIGENCE BRIEF", PAGE.w / 2, 114, { align: "center" });
 
   doc.setFontSize(11);
@@ -230,7 +231,7 @@ function addCover(doc: Doc, data: DailyBriefingData, title: string) {
   doc.text(data.meta.reportDateLabel, PAGE.w / 2, 132, { align: "center", maxWidth: PAGE.w - 50 });
 
   doc.setFontSize(9.5);
-  doc.setTextColor(...CREAM);
+  doc.setTextColor(...GOLD_SOFT);
   doc.text(
     `Generated: ${data.meta.generatedAtLabel || fmtDate(data.meta.generatedAt)}`,
     PAGE.w / 2, 144, { align: "center", maxWidth: PAGE.w - 50 }
@@ -254,13 +255,13 @@ export function downloadDailyBriefingPdf(data: DailyBriefingData, mode: "full" |
 
   // Status strip.
   f.need(14);
-  doc.setFillColor(248, 249, 245);
+  doc.setFillColor(250, 247, 242);
   doc.setDrawColor(...RULE);
   doc.setLineWidth(0.3);
   doc.roundedRect(PAGE.margin, f.y - 5, CONTENT_W, 11, 1.5, 1.5, "FD");
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9.5);
-  doc.setTextColor(...GREEN_DEEP);
+  doc.setTextColor(...NAVY_DEEP);
   doc.text(`Operational status: ${r.operationalStatusLabel}`, PAGE.margin + 3, f.y + 1.5);
   doc.setTextColor(...INK_SOFT);
   doc.text(`AI confidence: ${r.aiConfidenceScore}%`, PAGE.w - PAGE.margin - 3, f.y + 1.5, {

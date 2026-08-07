@@ -560,7 +560,7 @@ export function DailyBriefingPage() {
                     ) : null}
                   </Box>
                 </Box>
-                <Box sx={{ height: 10, borderRadius: 1, bgcolor: "rgba(62,86,38,0.08)", overflow: "hidden" }}>
+                <Box sx={{ height: 10, borderRadius: 1, bgcolor: "rgba(74,18,32,0.06)", overflow: "hidden" }}>
                   <Box
                     sx={{
                       height: "100%",
