@@ -1,20 +1,27 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { Box, Chip, CircularProgress, Grid, Paper, Stack, Tooltip, Typography } from "@mui/material";
+import {
+  Box, Chip, CircularProgress, Grid, IconButton, Paper, Stack, Table, TableBody,
+  TableCell, TableContainer, TableHead, TableRow, Tooltip, Typography,
+} from "@mui/material";
 import {
   Bar,
   BarChart,
   CartesianGrid,
   Cell,
+  Pie,
+  PieChart,
   ResponsiveContainer,
   Tooltip as RTooltip,
   XAxis,
   YAxis,
 } from "recharts";
 import InboxOutlinedIcon from "@mui/icons-material/InboxOutlined";
+import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
 import { api } from "../../lib/api";
 import { contentCardSx } from "../../lib/uiSurfaces";
+import { ellipsisSx, tableCellSx, tableHeadSx } from "../monitoring/monitoringTokens";
 import { MODULE_BY_KEY, type InferenceModuleKey } from "../../lib/inferenceModules";
 import { useAutoRefreshMs } from "../../lib/useAppSettings";
 import { usePermissions } from "../../lib/permissions";
@@ -61,6 +68,22 @@ const ALERT_SERVICES = ["loitering", "intrusion", "after_hours", "chef_absence"]
 const INK_MUTED = "rgba(0,0,0,.45)";
 const GRID = "rgba(0,0,0,.08)";
 const SEQ = "#2a78d6"; // single-hue sequential for magnitude charts
+
+/**
+ * Slice hues for the camera-activity donut.
+ *
+ * A donut is an ALL-PAIRS form - the reader compares slices that do not touch -
+ * which is a much harder gate than the adjacent-pair one the bar charts above
+ * clear. This exact five is what passes it: validated all-pairs on a light
+ * surface at worst CVD dE 6.9 and worst normal-vision dE 16.3. Slots that read
+ * fine in a bar chart (orange beside magenta, orange beside yellow) fail here,
+ * which is why this list is not the SERVICE_COLOUR order.
+ *
+ * Five slots is also the ceiling, hence top four cameras plus "Other" - the
+ * eleven-camera fleet cannot be seated in a pie without folding the tail.
+ */
+const SLICE_COLOURS = ["#2a78d6", "#eda100", "#1baf7a", "#4a3aa7", "#e34948"];
+const DONUT_SLICES = 4;
 
 const SITE_TZ = "Asia/Kolkata";
 
@@ -251,6 +274,44 @@ export function InferenceAnalyticsView({ from, to }: { from?: string; to?: strin
       .sort((a, b) => Number(b.n) - Number(a.n)),
     [stats]
   );
+
+  /**
+   * Donut slices: the busiest cameras, with the remainder folded into "Other".
+   *
+   * byCamera is one row per camera PER SERVICE, so a camera feeding two modules
+   * arrives twice; totalling by camera key first is what makes the shares add up
+   * to the whole rather than to something larger.
+   */
+  const cameraShare = useMemo(() => {
+    const byKey = new Map<string, number>();
+    for (const c of cameras) {
+      const key = (c.camera_key || "").trim() || "—";
+      byKey.set(key, (byKey.get(key) || 0) + Number(c.n));
+    }
+    const ranked = [...byKey.entries()]
+      .map(([name, n]) => ({ name, n }))
+      .sort((a, b) => b.n - a.n);
+    const total = ranked.reduce((a, r) => a + r.n, 0);
+    if (!total) return [];
+
+    const head = ranked.slice(0, DONUT_SLICES);
+    const tail = ranked.slice(DONUT_SLICES);
+    const slices = head.map((r, i) => ({
+      name: r.name,
+      title: r.name,
+      n: r.n,
+      colour: SLICE_COLOURS[i],
+    }));
+    if (tail.length) {
+      slices.push({
+        name: `Other (${tail.length} camera${tail.length === 1 ? "" : "s"})`,
+        title: tail.map((r) => `${r.name} — ${r.n}`).join("\n"),
+        n: tail.reduce((a, r) => a + r.n, 0),
+        colour: SLICE_COLOURS[DONUT_SLICES],
+      });
+    }
+    return slices.map((s) => ({ ...s, pct: Math.round((s.n / total) * 1000) / 10 }));
+  }, [cameras]);
   const upperColours = useMemo(
     () => (facets?.colours || []).filter((c) => c.region === "upper").slice(0, 8),
     [facets]
@@ -429,89 +490,152 @@ export function InferenceAnalyticsView({ from, to }: { from?: string; to?: strin
         Cameras and captures
       </Typography>
       <Grid container spacing={1.5} sx={{ mb: 2 }}>
-        {/* A table, not more colours: 11 cameras across 4 services exceeds any
-            sane categorical budget, and exact counts matter more than shape. */}
         <Grid size={{ xs: 12, md: 6 }}>
           <Paper sx={{ ...contentCardSx, p: 2, height: "100%" }}>
-            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Camera activity</Typography>
-            <Box sx={{ maxHeight: 300, overflowY: "auto" }}>
-              {cameras.map((cam) => {
-                const max = Number(cameras[0]?.n || 1);
-                const pct = Math.max(2, (Number(cam.n) / max) * 100);
-                return (
-                  <Box key={`${cam.service}-${cam.camera_key}`} sx={{ mb: 1.25 }}>
-                    <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", mb: 0.25 }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>Camera activity</Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+              Share of all events by camera
+            </Typography>
+            {cameraShare.length === 0 ? (
+              <Box sx={{ height: 250 }}><NoData label="No camera activity recorded yet" /></Box>
+            ) : (
+              <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} sx={{ alignItems: "center" }}>
+                <Box sx={{ width: { xs: "100%", sm: 190 }, height: 190, flexShrink: 0 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      {/* A donut, not a filled pie: the hole gives the total a
+                          home and keeps the arcs thin. paddingAngle is the 2px
+                          surface gap between adjacent fills. */}
+                      <Pie
+                        data={cameraShare}
+                        dataKey="n"
+                        nameKey="name"
+                        innerRadius="58%"
+                        outerRadius="92%"
+                        // The 2px white stroke IS the surface gap between
+                        // adjacent fills; paddingAngle only nudges them apart so
+                        // two same-sized neighbours still read as two arcs.
+                        paddingAngle={1}
+                        stroke="#fff"
+                        strokeWidth={2}
+                        isAnimationActive={false}
+                      >
+                        {cameraShare.map((s) => (
+                          <Cell key={s.name} fill={s.colour} />
+                        ))}
+                      </Pie>
+                      <RTooltip
+                        formatter={(v, n) => [`${Number(v ?? 0)} events`, String(n)] as [string, string]}
+                        contentStyle={{ fontSize: 12, borderRadius: 8 }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </Box>
+
+                {/* Legend carries the exact counts. Two slice hues sit under 3:1
+                    against the card, so identity is never colour alone - the
+                    name and number next to each swatch are the relief. */}
+                <Stack spacing={0.75} sx={{ flex: 1, minWidth: 0, width: "100%" }}>
+                  {cameraShare.map((s) => (
+                    <Stack key={s.name} direction="row" spacing={1}
+                           sx={{ alignItems: "center", justifyContent: "space-between", minWidth: 0 }}>
                       <Stack direction="row" spacing={0.75} sx={{ alignItems: "center", minWidth: 0 }}>
-                        <Box sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: SERVICE_COLOUR[cam.service], flexShrink: 0 }} />
-                        <Tooltip title={cam.camera_key}>
-                          <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>
-                            {cam.camera_key.trim()}
-                          </Typography>
+                        <Box sx={{ width: 10, height: 10, borderRadius: "2px", bgcolor: s.colour, flexShrink: 0 }} />
+                        <Tooltip title={s.title}>
+                          <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>{s.name}</Typography>
                         </Tooltip>
-                        <Chip size="small" variant="outlined" label={SERVICE_LABEL[cam.service]}
-                              sx={{ height: 18, fontSize: 10 }} />
                       </Stack>
-                      <Typography variant="body2" sx={{ fontWeight: 700, ml: 1 }}>{cam.n}</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 700, whiteSpace: "nowrap" }}>
+                        {s.n}
+                        <Box component="span" sx={{ ml: 0.5, fontWeight: 500, color: "text.secondary" }}>
+                          {s.pct}%
+                        </Box>
+                      </Typography>
                     </Stack>
-                    <Box sx={{ height: 6, bgcolor: "rgba(0,0,0,.06)", borderRadius: 3, overflow: "hidden" }}>
-                      <Box sx={{ width: `${pct}%`, height: "100%", bgcolor: SERVICE_COLOUR[cam.service], borderRadius: 3 }} />
-                    </Box>
-                    <Typography variant="caption" color="text.secondary">
-                      last seen {fmtDateTime(cam.latest)}
-                    </Typography>
-                  </Box>
-                );
-              })}
-              {cameras.length === 0 && (
-                <Typography variant="body2" color="text.secondary">No camera activity recorded yet.</Typography>
-              )}
-            </Box>
+                  ))}
+                </Stack>
+              </Stack>
+            )}
           </Paper>
         </Grid>
 
-        {/* Latest captures - the dashboard should show the actual evidence. */}
+        {/* Latest captures - the dashboard should show the actual evidence.
+            A table rather than a thumbnail wall: the grid showed a picture and a
+            timestamp but never said which module fired or which camera saw it,
+            so a capture could not be identified without opening it. */}
         <Grid size={{ xs: 12, md: 6 }}>
-          <Paper sx={{ ...contentCardSx, p: 2, height: "100%" }}>
-            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Latest captures</Typography>
-            <Grid container spacing={1}>
-              {(recent?.rows || []).slice(0, 12).map((r: any, i: number) => {
-                const thumb = r.posterUrl || (String(r.content_type || "").startsWith("image") ? r.mediaUrl : null);
-                return (
-                  <Grid key={`${r.service}-${r.id}`} size={{ xs: 4, sm: 3 }}>
-                    <Box
-                      onClick={() => setCaptureIndex(i)}
-                      sx={{
-                        position: "relative", borderRadius: 1.5, overflow: "hidden",
-                        bgcolor: "#0e0e12", height: 74, cursor: "pointer",
-                        transition: "transform 140ms ease, box-shadow 140ms ease",
-                        "&:hover": { transform: "scale(1.03)", boxShadow: "0 4px 12px rgba(0,0,0,.28)" },
-                      }}
-                    >
-                      {thumb ? (
-                        <Box component="img" src={thumb} alt={r.service} loading="lazy"
-                             sx={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                      ) : (
-                        <Box sx={{ display: "flex", height: "100%", alignItems: "center", justifyContent: "center" }}>
-                          <Typography variant="caption" sx={{ color: "rgba(255,255,255,.5)" }}>—</Typography>
-                        </Box>
-                      )}
-                      <Box sx={{
-                        position: "absolute", left: 4, top: 4, width: 8, height: 8, borderRadius: "50%",
-                        bgcolor: SERVICE_COLOUR[r.service] || "#999", border: "1px solid rgba(255,255,255,.8)",
-                      }} />
-                    </Box>
-                    <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>
-                      {fmtDateTime(r.occurred_at)}
-                    </Typography>
-                  </Grid>
-                );
-              })}
-              {!(recent?.rows || []).length && (
-                <Grid size={12}>
-                  <Typography variant="body2" color="text.secondary">Nothing captured yet.</Typography>
-                </Grid>
-              )}
-            </Grid>
+          <Paper sx={{ ...contentCardSx, p: 0, height: "100%", overflow: "hidden" }}>
+            <Box sx={{ p: 2, pb: 1 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>Latest captures</Typography>
+              <Typography variant="caption" color="text.secondary">
+                Most recent detections across every module
+              </Typography>
+            </Box>
+            <TableContainer sx={{ maxHeight: 300 }}>
+              <Table size="small" stickyHeader sx={{ width: "100%", tableLayout: "fixed" }}>
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={{ ...tableHeadSx, width: 74 }}>Capture</TableCell>
+                    <TableCell sx={{ ...tableHeadSx, width: 118 }}>Event</TableCell>
+                    <TableCell sx={tableHeadSx}>Camera</TableCell>
+                    <TableCell sx={{ ...tableHeadSx, width: 124 }}>Detected at</TableCell>
+                    <TableCell sx={{ ...tableHeadSx, width: 62 }} align="center">View</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {(recent?.rows || []).slice(0, 12).map((r: any, i: number) => {
+                    const thumb = r.posterUrl || (String(r.content_type || "").startsWith("image") ? r.mediaUrl : null);
+                    const hue = SERVICE_COLOUR[r.service] || "#999";
+                    return (
+                      <TableRow key={`${r.service}-${r.id}`} hover sx={{ cursor: "pointer" }}
+                                onClick={() => setCaptureIndex(i)}>
+                        <TableCell sx={{ ...tableCellSx, width: 74 }}>
+                          <Box sx={{ position: "relative", width: 52, height: 38, borderRadius: "6px",
+                                     overflow: "hidden", bgcolor: "rgba(15,23,42,.08)" }}>
+                            {thumb ? (
+                              <Box component="img" src={thumb} alt="" loading="lazy"
+                                   sx={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                                   onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = "hidden"; }} />
+                            ) : null}
+                          </Box>
+                        </TableCell>
+                        <TableCell sx={{ ...tableCellSx, width: 118 }}>
+                          <Chip
+                            size="small"
+                            label={SERVICE_LABEL[r.service] || r.service}
+                            sx={{
+                              maxWidth: "100%", height: 22, fontSize: 11, fontWeight: 700,
+                              bgcolor: `${hue}1A`, color: hue, border: `1px solid ${hue}44`,
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell sx={tableCellSx}>
+                          <Tooltip title={r.camera_key || ""}>
+                            <Box component="span" sx={ellipsisSx}>{(r.camera_key || "—").trim() || "—"}</Box>
+                          </Tooltip>
+                        </TableCell>
+                        <TableCell sx={{ ...tableCellSx, width: 124 }}>
+                          <Box component="span" sx={{ whiteSpace: "normal" }}>{fmtDateTime(r.occurred_at)}</Box>
+                        </TableCell>
+                        <TableCell sx={{ ...tableCellSx, width: 62 }} align="center">
+                          <IconButton size="small" aria-label="View capture"
+                                      onClick={(e) => { e.stopPropagation(); setCaptureIndex(i); }}>
+                            <VisibilityOutlinedIcon fontSize="small" />
+                          </IconButton>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                  {!(recent?.rows || []).length && (
+                    <TableRow>
+                      <TableCell colSpan={5} sx={{ ...tableCellSx, py: 5, textAlign: "center" }}>
+                        <Typography variant="body2" color="text.secondary">Nothing captured yet.</Typography>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
           </Paper>
         </Grid>
       </Grid>
