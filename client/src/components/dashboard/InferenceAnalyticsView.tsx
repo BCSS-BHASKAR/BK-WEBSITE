@@ -243,18 +243,6 @@ export function InferenceAnalyticsView({ from, to }: { from?: string; to?: strin
   }, [stats]);
   const hourlyTotal = useMemo(() => hourly.reduce((a, r) => a + r.n, 0), [hourly]);
 
-  // Headings name the period actually queried rather than a fixed "last 14
-  // days", which stayed put while the masthead range control moved underneath
-  // it and made every chart look like it covered a fortnight.
-  const rangeLabel = useMemo(() => {
-    if (!from || !to) return "last 14 days";
-    const fmt = (iso: string) =>
-      new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", {
-        timeZone: "UTC", day: "2-digit", month: "short",
-      });
-    return from === to ? fmt(from) : `${fmt(from)} – ${fmt(to)}`;
-  }, [from, to]);
-
   // Rows for services the dashboard no longer reports are dropped rather than
   // rendered with a blank chip and an uncoloured bar.
   const cameras = useMemo(
@@ -326,10 +314,8 @@ export function InferenceAnalyticsView({ from, to }: { from?: string; to?: strin
 
       {/* Small multiples: one single-series chart per service. Avoids a 4-series
           stack where hues would compete, and each chart names its own series so
-          no legend box is needed. */}
-      <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
-        
-      </Typography>
+          no legend box is needed - which is also why there is no heading above
+          this row: an empty one only added a blank band of whitespace. */}
       <Grid container spacing={1.5} sx={{ mb: 2 }}>
         {perService.map((s) => (
           <Grid key={s.service} size={{ xs: 12, sm: 6, md: 4 }}>
