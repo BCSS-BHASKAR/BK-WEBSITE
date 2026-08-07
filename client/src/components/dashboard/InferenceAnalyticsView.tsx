@@ -559,10 +559,12 @@ export function InferenceAnalyticsView({ from, to }: { from?: string; to?: strin
           </Paper>
         </Grid>
 
-        {/* Latest captures - the dashboard should show the actual evidence.
+        {/* Latest captures.
             A table rather than a thumbnail wall: the grid showed a picture and a
             timestamp but never said which module fired or which camera saw it,
-            so a capture could not be identified without opening it. */}
+            so a capture could not be identified without opening it. The
+            thumbnail column is gone too - the four text columns identify a row,
+            and the evidence itself is one click away in the viewer. */}
         <Grid size={{ xs: 12, md: 6 }}>
           <Paper sx={{ ...contentCardSx, p: 0, height: "100%", overflow: "hidden" }}>
             <Box sx={{ p: 2, pb: 1 }}>
@@ -575,7 +577,6 @@ export function InferenceAnalyticsView({ from, to }: { from?: string; to?: strin
               <Table size="small" stickyHeader sx={{ width: "100%", tableLayout: "fixed" }}>
                 <TableHead>
                   <TableRow>
-                    <TableCell sx={{ ...tableHeadSx, width: 74 }}>Capture</TableCell>
                     <TableCell sx={{ ...tableHeadSx, width: 118 }}>Event</TableCell>
                     <TableCell sx={tableHeadSx}>Camera</TableCell>
                     <TableCell sx={{ ...tableHeadSx, width: 124 }}>Detected at</TableCell>
@@ -584,21 +585,10 @@ export function InferenceAnalyticsView({ from, to }: { from?: string; to?: strin
                 </TableHead>
                 <TableBody>
                   {(recent?.rows || []).slice(0, 12).map((r: any, i: number) => {
-                    const thumb = r.posterUrl || (String(r.content_type || "").startsWith("image") ? r.mediaUrl : null);
                     const hue = SERVICE_COLOUR[r.service] || "#999";
                     return (
                       <TableRow key={`${r.service}-${r.id}`} hover sx={{ cursor: "pointer" }}
                                 onClick={() => setCaptureIndex(i)}>
-                        <TableCell sx={{ ...tableCellSx, width: 74 }}>
-                          <Box sx={{ position: "relative", width: 52, height: 38, borderRadius: "6px",
-                                     overflow: "hidden", bgcolor: "rgba(15,23,42,.08)" }}>
-                            {thumb ? (
-                              <Box component="img" src={thumb} alt="" loading="lazy"
-                                   sx={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-                                   onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = "hidden"; }} />
-                            ) : null}
-                          </Box>
-                        </TableCell>
                         <TableCell sx={{ ...tableCellSx, width: 118 }}>
                           <Chip
                             size="small"
@@ -628,7 +618,7 @@ export function InferenceAnalyticsView({ from, to }: { from?: string; to?: strin
                   })}
                   {!(recent?.rows || []).length && (
                     <TableRow>
-                      <TableCell colSpan={5} sx={{ ...tableCellSx, py: 5, textAlign: "center" }}>
+                      <TableCell colSpan={4} sx={{ ...tableCellSx, py: 5, textAlign: "center" }}>
                         <Typography variant="body2" color="text.secondary">Nothing captured yet.</Typography>
                       </TableCell>
                     </TableRow>
