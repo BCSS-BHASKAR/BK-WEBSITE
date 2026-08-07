@@ -28,6 +28,8 @@ const execFileAsync = promisify(execFile);
 
 const POSTER_DIR = process.env.INFERENCE_POSTER_DIR || "/var/lib/anpr/posters";
 const HEAD_BYTES = Number(process.env.INFERENCE_POSTER_HEAD_BYTES || 3 * 1024 * 1024);
+// Ceiling for pulling a whole object instead of just its head. See fetchBytesFor.
+const FULL_FETCH_MAX = Number(process.env.INFERENCE_POSTER_FULL_MAX || 32 * 1024 * 1024);
 const POSTER_TTL_SECONDS = Number(process.env.INFERENCE_POSTER_TTL || 3600);
 const POSTER_WIDTH = 480;
 
@@ -43,6 +45,25 @@ function ensureDir() {
   fs.mkdirSync(POSTER_DIR, { recursive: true });
 }
 
+/**
+ * How many bytes of an object are needed to decode one frame.
+ *
+ * The loitering WebMs put their cues up front, so a head slice is enough. The
+ * chef_absence MP4s do not: they are written without faststart, so moov sits at
+ * the END and a head slice alone decodes to nothing. Since almost all of them
+ * are only a few MB, the whole object is pulled when it is small enough, and
+ * anything larger falls back to the head slice (which still works for formats
+ * that front-load their index).
+ *
+ * A still always needs to arrive whole.
+ */
+function fetchBytesFor({ sizeBytes, isImage }) {
+  const size = Number(sizeBytes) || 0;
+  if (isImage) return size || HEAD_BYTES;
+  if (size && size <= FULL_FETCH_MAX) return size;
+  return HEAD_BYTES;
+}
+
 function posterFile(assetId) {
   return path.join(POSTER_DIR, `${Number(assetId)}.jpg`);
 }
@@ -55,14 +76,22 @@ function hasPoster(assetId) {
   }
 }
 
-/** Generate and cache a poster. Returns true if a poster exists afterwards. */
-async function generatePoster(assetId, s3Key) {
+/**
+ * Generate and cache a poster. Returns true if a poster exists afterwards.
+ *
+ * `headBytes` overrides how much of the object is pulled. A video only needs
+ * its opening megabytes, but a still has to arrive whole or it cannot be
+ * decoded - the chef_absence intrusion PNGs are 3 MB each and pass their own
+ * size here. ffmpeg reads a PNG as a single-frame input, so the same command
+ * serves both cases.
+ */
+async function generatePoster(assetId, s3Key, { headBytes = HEAD_BYTES } = {}) {
   if (hasPoster(assetId)) return true;
   ensureDir();
 
   const tmp = path.join(POSTER_DIR, `.${assetId}.part`);
   try {
-    const head = await getObjectHead(s3Key, HEAD_BYTES);
+    const head = await getObjectHead(s3Key, headBytes);
     fs.writeFileSync(tmp, head);
     // -frames:v 1 stops after the first decoded frame. A truncated container
     // makes ffmpeg noisy on stderr but it still emits the frame, so failure is
@@ -78,6 +107,60 @@ async function generatePoster(assetId, s3Key) {
   } finally {
     try { fs.unlinkSync(tmp); } catch {}
   }
+}
+
+// Dedupe concurrent generation. A grid renders ~48 tiles at once and a browser
+// will happily open them in parallel; without this, a cache miss on a fresh
+// page would pull the same object several times over.
+const inflight = new Map();
+
+// Remember what could NOT be rendered.
+//
+// Some assets can never produce a poster - a clip larger than FULL_FETCH_MAX
+// whose moov sits past the head slice, a truncated upload, a codec ffmpeg here
+// cannot decode. Without this, every page view re-downloads that object and
+// re-runs ffmpeg to fail again, which for a 341 MB clip means 341 MB of
+// transfer per viewer. Entries expire so a genuinely transient failure (a
+// throttled S3 call) is retried rather than written off for good.
+const failed = new Map(); // assetId -> retry-after epoch ms
+const FAILURE_TTL_MS = Number(process.env.INFERENCE_POSTER_FAILURE_TTL_MS || 6 * 60 * 60 * 1000);
+
+function recentlyFailed(assetId) {
+  const until = failed.get(Number(assetId));
+  if (until == null) return false;
+  if (until > Date.now()) return true;
+  failed.delete(Number(assetId));
+  return false;
+}
+
+/**
+ * Generate on first request rather than up front.
+ *
+ * chef_absence is ~5.6 GB and the fastest-growing source in the system, so
+ * pre-rendering every intrusion still would move gigabytes to thumbnail images
+ * nobody has asked to see. Paging through the UI touches a few dozen at a time,
+ * and each one is cached permanently once made.
+ */
+function ensurePoster(assetId, s3Key, opts) {
+  if (hasPoster(assetId)) return Promise.resolve(true);
+  const id = Number(assetId);
+  if (recentlyFailed(id)) return Promise.resolve(false);
+  if (inflight.has(id)) return inflight.get(id);
+
+  const p = generatePoster(id, s3Key, opts)
+    .then((ok) => {
+      if (!ok) failed.set(id, Date.now() + FAILURE_TTL_MS);
+      return ok;
+    })
+    .catch(() => {
+      // generatePoster swallows its own errors, but a throw here would leave
+      // the entry in `inflight` forever without the finally below.
+      failed.set(id, Date.now() + FAILURE_TTL_MS);
+      return false;
+    })
+    .finally(() => inflight.delete(id));
+  inflight.set(id, p);
+  return p;
 }
 
 // --- signed poster URLs ----------------------------------------------------
@@ -111,9 +194,11 @@ function verifyPosterUrl(assetId, exp, sig) {
 
 module.exports = {
   POSTER_DIR,
+  fetchBytesFor,
   posterFile,
   hasPoster,
   generatePoster,
+  ensurePoster,
   posterUrl,
   verifyPosterUrl,
 };

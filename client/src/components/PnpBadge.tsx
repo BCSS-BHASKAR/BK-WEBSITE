@@ -10,8 +10,6 @@ type Props = {
 };
 
 export function PnpBadge({ size = 130, alt = SITE_BRANDING.productName, sx }: Props) {
-  const height = Math.round(size * 1.38);
-
   return (
     <Box
       component="img"
@@ -19,7 +17,7 @@ export function PnpBadge({ size = 130, alt = SITE_BRANDING.productName, sx }: Pr
       alt={alt}
       sx={{
         width: size,
-        height,
+        height: size,
         maxWidth: "100%",
         objectFit: "contain",
         objectPosition: "center center",

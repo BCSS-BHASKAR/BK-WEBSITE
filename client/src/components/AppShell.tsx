@@ -73,21 +73,34 @@ const nav: {
   vehicleModule?: boolean;
   // Kept routable (the dashboard still links here) but dropped from the menu.
   hiddenFromMenu?: boolean;
-  /** Renders a small caption above this item, starting a visual group. */
-  sectionLabel?: string;
+  /**
+   * Section this item belongs to.
+   *
+   * Renders as a small static caption above the first member that survives the
+   * RBAC filter, which is the sidebar's original presentation - a plain group
+   * heading with indented rows, no parent row and nothing to expand. Declaring
+   * it on every member rather than on the lead row alone is what keeps the
+   * caption present for a user who cannot see Walk-ins.
+   */
+  group?: string;
   /** Indented as a child of the section above it. */
   child?: boolean;
 }[] = [
   { label: SITE_LABELS.operationalDashboardsNavShort, path: "/dashboard", icon: <DashboardIcon />, page: "dashboard" },
   { label: "AI Daily Briefing", path: "/daily-briefing", icon: <AutoAwesomeOutlinedIcon />, page: "daily_briefing" },
 
-  // One Monitoring page template serves all five inference types; each entry
-  // differs only by its route slug. See lib/inferenceModules.ts.
-  { label: "Walk-ins", path: "/monitoring/walkins", icon: <DirectionsWalkOutlinedIcon />, sectionLabel: "Monitoring", child: true, page: "monitoring_walkins" },
-  { label: "Loitering", path: "/monitoring/loitering", icon: <TimerOutlinedIcon />, child: true, page: "monitoring_loitering" },
-  { label: "Intrusion", path: "/monitoring/intrusion", icon: <ReportGmailerrorredOutlinedIcon />, child: true, page: "monitoring_intrusion" },
-  { label: "After Hours", path: "/monitoring/after-hours", icon: <NightsStayOutlinedIcon />, child: true, page: "monitoring_after_hours" },
-  { label: "Kitchen Unattended", path: "/monitoring/kitchen-unattended", icon: <SoupKitchenOutlinedIcon />, child: true, page: "monitoring_kitchen" },
+  // The Monitoring page template serves the first five inference types; each
+  // entry differs only by its route slug. See lib/inferenceModules.ts.
+  // Chef Absence is the exception - it has its own page, because it reports on
+  // station coverage and uniform compliance rather than listing detections.
+  { label: "Walk-ins", path: "/monitoring/walkins", icon: <DirectionsWalkOutlinedIcon />, group: "Monitoring", child: true, page: "monitoring_walkins" },
+  { label: "Loitering", path: "/monitoring/loitering", icon: <TimerOutlinedIcon />, group: "Monitoring", child: true, page: "monitoring_loitering" },
+  { label: "Intrusion", path: "/monitoring/intrusion", icon: <ReportGmailerrorredOutlinedIcon />, group: "Monitoring", child: true, page: "monitoring_intrusion" },
+  { label: "After Hours", path: "/monitoring/after-hours", icon: <NightsStayOutlinedIcon />, group: "Monitoring", child: true, page: "monitoring_after_hours" },
+  // Hidden from the sidebar - Chef Absence covers the same ground. The route
+  // stays live so dashboard tiles and saved links still reach it.
+  { label: "Kitchen Unattended", path: "/monitoring/kitchen-unattended", icon: <SoupKitchenOutlinedIcon />, group: "Monitoring", child: true, page: "monitoring_kitchen", hiddenFromMenu: true },
+  { label: "Chef Absence", path: "/monitoring/chef-absence", icon: <SoupKitchenOutlinedIcon />, group: "Monitoring", child: true, page: "monitoring_chef_absence" },
 
   { label: "Active Alerts", path: "/crowds-report", icon: <WarningAmberRoundedIcon />, page: "active_alerts" },
   { label: SITE_LABELS.liveView, path: "/live-view", icon: <VideocamRoundedIcon />, page: "cameras_online" },
@@ -190,6 +203,121 @@ function AppShellInner() {
   const sidebarExpanded = isMobile ? true : !collapsed;
   const drawerWidth = isMobile ? DRAWER_WIDTH : sidebarExpanded ? DRAWER_WIDTH : DRAWER_COLLAPSED;
 
+  type NavItem = (typeof baseNav)[number];
+
+  /**
+   * The first visible member of each section, which is the row that carries the
+   * section caption. Computed over the RBAC-filtered list so the heading follows
+   * whichever member the user can actually reach.
+   */
+  const sectionLeads = useMemo(() => {
+    const leads = new Map<string, string>();
+    for (const n of visibleNav) {
+      if (n.group && !leads.has(n.group)) leads.set(n.group, n.label);
+    }
+    return leads;
+  }, [visibleNav]);
+
+  /** One nav row. */
+  const renderNavItem = useCallback(
+    (n: NavItem) => {
+      const selected = isNavActive(n.path, loc.pathname);
+      const disabled = n.path == null;
+      const linkProps: Record<string, unknown> =
+        !disabled && n.path
+          ? {
+              component: Link,
+              to: n.path,
+              ...(n.openInNewTab ? { target: "_blank", rel: "noopener noreferrer" } : {}),
+            }
+          : { component: "div" };
+
+      const item = (
+        <ListItemButton
+          key={n.label}
+          {...linkProps}
+          selected={selected}
+          disabled={disabled}
+          aria-current={selected ? "page" : undefined}
+          sx={{
+            ...navItemSx(selected, sidebarExpanded),
+            ...(n.child && sidebarExpanded ? { pl: 3.25 } : {}),
+            ...(disabled
+              ? {
+                  opacity: 0.45,
+                  cursor: "default",
+                  "&.Mui-disabled": { opacity: 0.45, color: pnp.navText },
+                }
+              : {}),
+          }}
+        >
+          <ListItemIcon
+            sx={{
+              minWidth: sidebarExpanded ? 40 : 0,
+              justifyContent: "center",
+              color: selected ? "#FFFFFF" : "rgba(248,250,252,0.75)",
+              "& .MuiSvgIcon-root": { fontSize: 22 },
+            }}
+          >
+            {n.icon}
+          </ListItemIcon>
+          {sidebarExpanded ? (
+            <ListItemText
+              primary={
+                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, minWidth: 0 }}>
+                  <Typography
+                    sx={{
+                      fontWeight: selected ? 600 : 500,
+                      fontSize: "0.875rem",
+                      color: selected ? "#FFFFFF" : "rgba(248,250,252,0.9)",
+                    }}
+                    noWrap
+                  >
+                    {n.label}
+                  </Typography>
+                  {n.openInNewTab ? (
+                    <OpenInNewIcon sx={{ fontSize: 14, opacity: 0.65, flexShrink: 0 }} />
+                  ) : null}
+                </Box>
+              }
+            />
+          ) : null}
+        </ListItemButton>
+      );
+
+      const row = sidebarExpanded ? (
+        item
+      ) : (
+        <Tooltip key={n.label} title={n.label} placement="right" arrow>
+          <span>{item}</span>
+        </Tooltip>
+      );
+
+      // The section caption sits above its first reachable member. The collapsed
+      // rail has no room for it, so there the rows render flat with tooltips.
+      const showCaption = Boolean(n.group) && sidebarExpanded && sectionLeads.get(n.group as string) === n.label;
+      if (!showCaption) return row;
+
+      return (
+        <Box key={`sec-${n.group}`}>
+          <Typography
+            sx={{
+              px: 2, pt: 1.5, pb: 0.5, fontSize: 10, fontWeight: 800,
+              letterSpacing: "0.09em", textTransform: "uppercase",
+              // 0.7, not the 0.45 this caption used to carry: against the brand
+              // green that read at 2.9:1, under the 4.5:1 floor for small text.
+              color: "rgba(248,250,252,0.7)",
+            }}
+          >
+            {n.group}
+          </Typography>
+          {row}
+        </Box>
+      );
+    },
+    [loc.pathname, sidebarExpanded, sectionLeads]
+  );
+
   const pageTitle = useMemo(() => navPageTitle[loc.pathname] ?? SITE_BRANDING.productShort, [loc.pathname]);
   const pageSubtitle = useMemo(() => navPageSubtitle[loc.pathname], [loc.pathname]);
 
@@ -287,102 +415,8 @@ function AppShellInner() {
       )}
 
       <List dense sx={{ mt: 0, flex: 1, py: 0 }}>
-        {visibleNav.map((n) => {
-          const selected = isNavActive(n.path, loc.pathname);
-          const sectionCaption =
-            n.sectionLabel && sidebarExpanded ? (
-              <Typography
-                key={`sec-${n.sectionLabel}`}
-                sx={{
-                  px: 2, pt: 1.5, pb: 0.5, fontSize: 10, fontWeight: 800,
-                  letterSpacing: "0.09em", textTransform: "uppercase",
-                  color: "rgba(248,250,252,0.45)",
-                }}
-              >
-                {n.sectionLabel}
-              </Typography>
-            ) : null;
-          const disabled = n.path == null;
-          
-          const linkProps: any = !disabled && n.path
-            ? { 
-                component: Link, 
-                to: n.path,
-                ...(n.openInNewTab ? { target: "_blank", rel: "noopener noreferrer" } : {})
-              }
-            : { component: "div" };
-
-          const item = (
-            <ListItemButton
-              key={n.label}
-              {...linkProps}
-              selected={selected}
-              disabled={disabled}
-              aria-current={selected ? "page" : undefined}
-              sx={{
-                ...navItemSx(selected, sidebarExpanded),
-                ...(n.child && sidebarExpanded ? { pl: 3.25 } : {}),
-                ...(disabled
-                  ? {
-                      opacity: 0.45,
-                      cursor: "default",
-                      "&.Mui-disabled": { opacity: 0.45, color: pnp.navText },
-                    }
-                  : {}),
-              }}
-            >
-              <ListItemIcon
-                sx={{
-                  minWidth: sidebarExpanded ? 40 : 0,
-                  justifyContent: "center",
-                  color: selected ? "#FFFFFF" : "rgba(248,250,252,0.75)",
-                  "& .MuiSvgIcon-root": { fontSize: 22 },
-                }}
-              >
-                {n.icon}
-              </ListItemIcon>
-              {sidebarExpanded ? (
-                <ListItemText
-                  primary={
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, minWidth: 0 }}>
-                      <Typography
-                        sx={{
-                          fontWeight: selected ? 600 : 500,
-                          fontSize: "0.875rem",
-                          color: selected ? "#FFFFFF" : "rgba(248,250,252,0.9)",
-                        }}
-                        noWrap
-                      >
-                        {n.label}
-                      </Typography>
-                      {n.openInNewTab ? (
-                        <OpenInNewIcon sx={{ fontSize: 14, opacity: 0.65, flexShrink: 0 }} />
-                      ) : null}
-                    </Box>
-                  }
-                />
-              ) : null}
-            </ListItemButton>
-          );
-
-          const rendered = sidebarExpanded ? (
-            item
-          ) : (
-            <Tooltip key={n.label} title={n.label} placement="right" arrow>
-              <span>{item}</span>
-            </Tooltip>
-          );
-
-          // A section caption cannot be a sibling of the item inside .map, so
-          // both are returned together under one fragment key.
-          return sectionCaption ? (
-            <Box key={`grp-${n.label}`}>{sectionCaption}{rendered}</Box>
-          ) : (
-            rendered
-          );
-        })}
+        {visibleNav.map((n) => renderNavItem(n))}
       </List>
-
       {}
       {SHOW_SIDEBAR_STATUS_AND_PROFILE && sidebarExpanded ? (
         <>
@@ -517,7 +551,13 @@ function AppShellInner() {
               flexDirection: "column",
             }}
           >
-            <Box sx={{ flex: 1, minWidth: 0 }}><Outlet /></Box>
+            {/* mb here, not padding on each page: the footer is a sibling of
+                the routed content with no spacing declared between them, so
+                whichever element a page ended on butted straight against the
+                footer bar. Applying it once at the boundary fixes every route
+                including the pages that do not use pageLayoutSx (AI Daily
+                Briefing among them), and cannot be forgotten by a new page. */}
+            <Box sx={{ flex: 1, minWidth: 0, mb: { xs: 2, md: 2.5 } }}><Outlet /></Box>
             {loc.pathname.startsWith("/assistant_enhance") ? null : <AppFooter />}
           </Box>
         </Box>

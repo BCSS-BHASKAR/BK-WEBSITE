@@ -24,9 +24,13 @@ const {
   parseWalkinCrop,
   parseIntrusionRecord,
   parseWalkinRecord,
+  parseChefAbsenceClip,
+  parseKitchenIntrusion,
+  parseChefRecord,
 } = require("./inferenceParsers");
 const { listObjects, getObjectText, PREFIX } = require("./inferenceS3");
-const { generatePoster, hasPoster } = require("./inferencePosters");
+const { ensurePoster, hasPoster, fetchBytesFor } = require("./inferencePosters");
+const { probeMp4 } = require("./mp4Probe");
 
 const SIDECAR_RE = /\.jsonl$/i;
 
@@ -95,8 +99,13 @@ async function noteCamera(pool, service, cameraKey) {
 async function ingestMedia(pool, { since = null } = {}) {
   const sidecars = [];
   const videoAssets = [];
+  const imageAssets = []; // large stills that need a downscaled thumbnail
   const cropIndex = new Map(); // basename -> asset id
   const snapshotIndex = new Map();
+  // chef_absence crops share the walkins filename shape
+  // (person_<track>_<epoch>.jpg), so they need their own index or a basename
+  // collision would attach a kitchen crop to a walkins detection.
+  const chefCropIndex = new Map();
   let seen = 0;
   let assets = 0;
 
@@ -128,6 +137,19 @@ async function ingestMedia(pool, { since = null } = {}) {
       parsed = parseWalkinCrop(k.filename);
       // No camera id in a crop filename - it only arrives via the JSONL join.
       if (parsed) capturedAt = parsed.capturedAt;
+    } else if (k.service === "chef_absence") {
+      if (k.artefactType === "unattended") {
+        parsed = parseChefAbsenceClip(k.filename);
+        if (parsed) { cameraKey = parsed.cameraKey; capturedAt = parsed.startedAt; }
+      } else if (k.artefactType === "intrusions") {
+        // No camera id in the filename, and nothing else in the artefact set
+        // identifies one, so these stay camera-less.
+        parsed = parseKitchenIntrusion(k.filename);
+        if (parsed) capturedAt = parsed.occurredAt;
+      } else if (k.artefactType === "crops") {
+        parsed = parseWalkinCrop(k.filename);
+        if (parsed) capturedAt = parsed.capturedAt;
+      }
     }
     if (!parsed) continue;
 
@@ -143,11 +165,14 @@ async function ingestMedia(pool, { since = null } = {}) {
     await noteCamera(pool, k.service, cameraKey);
 
     // Videos need a poster frame or the UI shows a black rectangle.
-    if (contentTypeFor(k.filename).startsWith("video")) videoAssets.push({ assetId, key: o.Key });
+    if (contentTypeFor(k.filename).startsWith("video")) {
+      videoAssets.push({ assetId, key: o.Key, size: Number(o.Size) || 0 });
+    }
 
     const base = k.filename.split("/").pop();
     if (k.service === "walkins") cropIndex.set(base, assetId);
     if (t === "intrusion/snapshots") snapshotIndex.set(base, assetId);
+    if (t === "chef_absence/crops") chefCropIndex.set(base, assetId);
 
     // Service tables for the two sidecar-less services.
     if (t === "after_hours/frames") {
@@ -172,10 +197,49 @@ async function ingestMedia(pool, { since = null } = {}) {
            started_at = EXCLUDED.started_at`,
         [parsed.stream, parsed.globalId, parsed.sessionId, parsed.dwellSeconds, parsed.startedAt, assetId]
       );
+    } else if (t === "chef_absence/unattended") {
+      // Reading the clip index costs one range request, so it is only done
+      // once per clip - a repeat pass over an already-measured incident skips
+      // straight past it.
+      const [[known]] = await pool.query(
+        `SELECT frame_count FROM chef_absence_incident WHERE asset_id = ?`,
+        [assetId]
+      );
+      let probe = null;
+      if (!known || known.frame_count == null) probe = await probeMp4(o.Key, o.Size);
+
+      await pool.query(
+        `INSERT INTO chef_absence_incident
+           (camera_key, started_at, frame_count, clip_seconds, asset_id)
+         VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT (asset_id) DO UPDATE SET
+           camera_key   = EXCLUDED.camera_key,
+           started_at   = EXCLUDED.started_at,
+           frame_count  = COALESCE(EXCLUDED.frame_count, chef_absence_incident.frame_count),
+           clip_seconds = COALESCE(EXCLUDED.clip_seconds, chef_absence_incident.clip_seconds)`,
+        [
+          parsed.cameraKey,
+          parsed.startedAt,
+          probe ? probe.frameCount : null,
+          probe ? probe.durationSeconds : null,
+          assetId,
+        ]
+      );
+    } else if (t === "chef_absence/intrusions") {
+      await pool.query(
+        `INSERT INTO kitchen_intrusion (camera_key, occurred_at, daily_seq, asset_id)
+         VALUES (?, ?, ?, ?)
+         ON CONFLICT (asset_id) DO UPDATE SET
+           occurred_at = EXCLUDED.occurred_at, daily_seq = EXCLUDED.daily_seq`,
+        [null, parsed.occurredAt, parsed.dailySeq, assetId]
+      );
+      // A 3 MB PNG per tile would be unusable in a grid, so these get the same
+      // downscale treatment as video posters.
+      imageAssets.push({ assetId, key: o.Key, size: Number(o.Size) || 0 });
     }
   }
 
-  return { seen, assets, sidecars, cropIndex, snapshotIndex, videoAssets };
+  return { seen, assets, sidecars, cropIndex, snapshotIndex, chefCropIndex, videoAssets, imageAssets };
 }
 
 /** Pass 2a - intrusion sidecars. Upsert on (camera_key, occurred_at). */
@@ -277,6 +341,96 @@ async function ingestWalkinLog(pool, key, cropIndex) {
   return rows;
 }
 
+/**
+ * Pass 2c - chef_absence detections. Upsert on (camera_key, track_id,
+ * detected_at), matching the walkins contract.
+ *
+ * Both crop_path and frame_path point inside the same crops/ folder, so one
+ * index resolves the close crop and the wider frame.
+ */
+async function ingestChefLog(pool, key, chefCropIndex) {
+  const text = await getObjectText(key);
+  let rows = 0;
+  for (const line of text.split("\n")) {
+    if (!line.trim()) continue;
+    const rec = parseChefRecord(line);
+    if (!rec) continue;
+
+    const cropId = rec.cropBasename ? chefCropIndex.get(rec.cropBasename) || null : null;
+    const frameId = rec.frameBasename ? chefCropIndex.get(rec.frameBasename) || null : null;
+
+    const [res] = await pool.query(
+      `INSERT INTO chef_detection
+         (camera_key, track_id, raw_track_id, detected_at, status_chef, bbox, confidence,
+          upper_garment, lower_garment, cap_garment, face_quality,
+          identity_name, identity_similarity, mode,
+          crop_asset_id, frame_asset_id, source_key)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT (camera_key, track_id, detected_at) DO UPDATE SET
+         raw_track_id        = EXCLUDED.raw_track_id,
+         status_chef         = EXCLUDED.status_chef,
+         bbox                = EXCLUDED.bbox,
+         confidence          = EXCLUDED.confidence,
+         upper_garment       = EXCLUDED.upper_garment,
+         lower_garment       = EXCLUDED.lower_garment,
+         cap_garment         = EXCLUDED.cap_garment,
+         face_quality        = EXCLUDED.face_quality,
+         identity_name       = EXCLUDED.identity_name,
+         identity_similarity = EXCLUDED.identity_similarity,
+         mode                = EXCLUDED.mode,
+         crop_asset_id       = COALESCE(EXCLUDED.crop_asset_id, chef_detection.crop_asset_id),
+         frame_asset_id      = COALESCE(EXCLUDED.frame_asset_id, chef_detection.frame_asset_id),
+         source_key          = EXCLUDED.source_key
+       RETURNING id`,
+      [
+        rec.cameraKey,
+        rec.trackId,
+        rec.rawTrackId,
+        rec.detectedAt,
+        rec.statusChef,
+        rec.bbox ? JSON.stringify(rec.bbox) : null,
+        rec.confidence,
+        rec.upperGarment,
+        rec.lowerGarment,
+        rec.capGarment,
+        rec.faceQuality ? JSON.stringify(rec.faceQuality) : null,
+        rec.identityName,
+        rec.identitySimilarity,
+        rec.mode,
+        cropId,
+        frameId,
+        key,
+      ]
+    );
+    const detectionId = res.insertId;
+    await noteCamera(pool, "chef_absence", rec.cameraKey);
+
+    if (detectionId) {
+      // Full replace per detection: the sidecar is the source of truth and a
+      // rewritten line may carry different colour extraction.
+      await pool.query(`DELETE FROM chef_colour WHERE detection_id = ?`, [detectionId]);
+      for (const c of rec.colours) {
+        await pool.query(
+          `INSERT INTO chef_colour (detection_id, region, name, percentage, rgb)
+           VALUES (?, ?, ?, ?, ?)`,
+          [detectionId, c.region, c.name, c.percentage, toPgIntArray(c.rgb)]
+        );
+      }
+      // Crop filenames carry no camera id; the JSONL is the only thing that
+      // knows which camera produced them.
+      for (const id of [cropId, frameId]) {
+        if (!id) continue;
+        await pool.query(
+          `UPDATE media_asset SET camera_key = ? WHERE id = ? AND camera_key IS NULL`,
+          [rec.cameraKey, id]
+        );
+      }
+    }
+    rows++;
+  }
+  return rows;
+}
+
 /** Run one full ingest pass. Safe to call repeatedly. */
 async function runIngest(pool, { since = null } = {}) {
   const startedAt = Date.now();
@@ -289,6 +443,8 @@ async function runIngest(pool, { since = null } = {}) {
         sidecarRows += await ingestIntrusionLog(pool, s.key, media.snapshotIndex);
       } else if (s.service === "walkins") {
         sidecarRows += await ingestWalkinLog(pool, s.key, media.cropIndex);
+      } else if (s.service === "chef_absence") {
+        sidecarRows += await ingestChefLog(pool, s.key, media.chefCropIndex);
       }
     } catch (e) {
       console.error("[inference-ingest] sidecar failed", s.key, e.message);
@@ -308,14 +464,35 @@ async function runIngest(pool, { since = null } = {}) {
   const budget = Number(process.env.INFERENCE_POSTER_PER_PASS || 40);
   let postersMade = 0;
   for (const v of pending.slice(0, budget)) {
-    if (await generatePoster(v.assetId, v.key)) postersMade++;
+    if (await ensurePoster(v.assetId, v.key, { headBytes: fetchBytesFor({ sizeBytes: v.size, isImage: false }) })) {
+      postersMade++;
+    }
   }
   if (pending.length) {
     log(`posters: ${postersMade} generated, ${Math.max(0, pending.length - budget)} still pending`);
   }
 
+  // Intrusion stills are made on demand by the poster route, so this is only a
+  // warm-up: the NEWEST few, which is what the first page of the UI shows.
+  // Rendering the whole backlog eagerly would move ~5 GB to produce thumbnails
+  // for tiles nobody has opened. S3 lists keys in lexicographic order and these
+  // keys lead with the date, so the newest are at the end.
+  const pendingThumbs = media.imageAssets.filter((v) => !hasPoster(v.assetId));
+  const thumbBudget = Number(process.env.INFERENCE_THUMB_PER_PASS || 24);
+  let thumbsMade = 0;
+  for (const v of pendingThumbs.slice(-thumbBudget)) {
+    // A still must arrive whole to decode, so the object's own size is the
+    // fetch bound rather than the video head slice.
+    if (await ensurePoster(v.assetId, v.key, { headBytes: v.size || undefined })) thumbsMade++;
+  }
+  if (pendingThumbs.length) {
+    log(`thumbnails: ${thumbsMade} warmed, ${Math.max(0, pendingThumbs.length - thumbBudget)} left to the poster route`);
+  }
+
   const summary = {
     postersMade,
+    thumbsMade,
+    thumbsPending: Math.max(0, pendingThumbs.length - thumbBudget),
     postersPending: Math.max(0, pending.length - budget),
     objectsSeen: media.seen,
     assetsUpserted: media.assets,

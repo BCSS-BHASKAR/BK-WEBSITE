@@ -12,7 +12,14 @@ const express = require("express");
 const { pool } = require("../db");
 const { presignGet, probe } = require("../lib/inferenceS3");
 const { runIngest } = require("../lib/inferenceIngest");
-const { posterFile, hasPoster, posterUrl, verifyPosterUrl } = require("../lib/inferencePosters");
+const {
+  posterFile, hasPoster, ensurePoster, posterUrl, verifyPosterUrl, fetchBytesFor,
+} = require("../lib/inferencePosters");
+
+// Above this, a still is worth downscaling before it reaches a grid. The
+// walk-in crops are ~50 KB and are served as-is; the chef_absence intrusion
+// PNGs are 2.7-3.4 MB and are not.
+const THUMBNAIL_MIN_BYTES = 512 * 1024;
 const fs = require("fs");
 
 const router = express.Router();
@@ -29,6 +36,13 @@ function paginate(req) {
  * Shared date/camera filter. Columns differ per service, so the timestamp
  * column is passed in. Dates are interpreted in site time (IST) and compared
  * against TIMESTAMPTZ, so a "2026-08-06" filter means that IST calendar day.
+ *
+ * The ::timestamp cast is load-bearing. AT TIME ZONE has two overloads, and a
+ * bare `date` selects the wrong one - it is preferentially cast to timestamptz,
+ * so the result is a LOCAL timestamp that depends on the session's TimeZone.
+ * This database runs UTC, so the bound meant 11:00 IST rather than midnight and
+ * every filtered range was shifted by 11 hours. Casting to timestamp first
+ * yields timezone(text, timestamp) -> timestamptz, an absolute instant.
  */
 function buildFilters(req, tsCol, cameraCol) {
   const where = [];
@@ -38,11 +52,11 @@ function buildFilters(req, tsCol, cameraCol) {
   const dateRe = /^\d{4}-\d{2}-\d{2}$/;
 
   if (dateRe.test(from)) {
-    where.push(`${tsCol} >= (?::date AT TIME ZONE 'Asia/Kolkata')`);
+    where.push(`${tsCol} >= (?::date::timestamp AT TIME ZONE 'Asia/Kolkata')`);
     params.push(from);
   }
   if (dateRe.test(to)) {
-    where.push(`${tsCol} < ((?::date + 1) AT TIME ZONE 'Asia/Kolkata')`);
+    where.push(`${tsCol} < ((?::date + 1)::timestamp AT TIME ZONE 'Asia/Kolkata')`);
     params.push(to);
   }
   const camera = String(req.query.camera || "").trim();
@@ -66,7 +80,15 @@ async function withMedia(rows) {
         // keying on r.id would miss - or worse, silently return another clip's
         // frame. Always use the explicitly selected asset id.
         const assetId = r.asset_id != null ? r.asset_id : r.id;
-        if (out.isVideo && hasPoster(assetId)) out.posterUrl = posterUrl(assetId);
+        // A poster is offered for anything that needs one - every video, plus
+        // stills too large to drop straight into a grid. The URL is handed out
+        // whether or not the file exists yet; the poster route renders it on
+        // first request, so nothing is generated for tiles nobody opens.
+        const wantsPoster = out.isVideo || (
+          String(r.content_type || "").startsWith("image") &&
+          Number(r.size_bytes || 0) >= THUMBNAIL_MIN_BYTES
+        );
+        if (wantsPoster || hasPoster(assetId)) out.posterUrl = posterUrl(assetId);
       }
       delete out.s3_key;
       if (r.face_s3_key) {
@@ -98,7 +120,16 @@ const MODULES = {
   // Empty until the on-prem service writes uploads/kitchen_unattended/, but
   // wired up so the module behaves like the others rather than 404ing.
   kitchen_unattended: { table: "kitchen_unattended_event", alias: "k", ts: "k.started_at", cam: "k.camera_key" },
+  chef_absence: { table: "chef_absence_incident", alias: "c", ts: "c.started_at", cam: "c.camera_key" },
 };
+
+/**
+ * Streams that accept feedback but have no entry in MODULES - either because
+ * the service table is not yet written (kitchen_unattended) or because they are
+ * secondary streams of a module that already has one (the chef_absence
+ * intrusion snapshots and person classifications).
+ */
+const FEEDBACK_ONLY_MODULES = new Set(["kitchen_unattended", "chef_intrusion", "chef_detection"]);
 
 /**
  * Suppress detections a human has marked as a false positive.
@@ -188,8 +219,8 @@ router.get("/summary", async (req, res) => {
     const dateRe = /^\d{4}-\d{2}-\d{2}$/;
     const rng = (col) => {
       const parts = [];
-      if (dateRe.test(from)) parts.push(`${col} >= '${from}'::date AT TIME ZONE 'Asia/Kolkata'`);
-      if (dateRe.test(to)) parts.push(`${col} < ('${to}'::date + 1) AT TIME ZONE 'Asia/Kolkata'`);
+      if (dateRe.test(from)) parts.push(`${col} >= '${from}'::date::timestamp AT TIME ZONE 'Asia/Kolkata'`);
+      if (dateRe.test(to)) parts.push(`${col} < ('${to}'::date + 1)::timestamp AT TIME ZONE 'Asia/Kolkata'`);
       return parts.length ? ` AND ${parts.join(" AND ")}` : "";
     };
     const [[counts]] = await pool.query(
@@ -202,6 +233,13 @@ router.get("/summary", async (req, res) => {
            WHERE ${notFalsePositive("intrusion", "i.id")}${rng("i.occurred_at")})  AS intrusion,
          (SELECT COUNT(*) FROM walkin_detection d
            WHERE ${notFalsePositive("walkins", "d.id")}${rng("d.detected_at")})    AS walkins,
+         -- These two were absent, so the dashboard could only ever report four
+         -- of the six modules - its "events captured" total silently excluded
+         -- them, and no tile could be built on them.
+         (SELECT COUNT(*) FROM kitchen_unattended_event k
+           WHERE ${notFalsePositive("kitchen_unattended", "k.id")}${rng("k.started_at")}) AS kitchen_unattended,
+         (SELECT COUNT(*) FROM chef_absence_incident c
+           WHERE ${notFalsePositive("chef_absence", "c.id")}${rng("c.started_at")})       AS chef_absence,
          (SELECT COUNT(*) FROM media_asset)          AS assets,
          (SELECT COALESCE(SUM(size_bytes),0) FROM media_asset) AS bytes,
          (SELECT COUNT(*) FROM reinforcement_feedback WHERE feedback_type='false_positive') AS suppressed`
@@ -465,15 +503,50 @@ router.get("/media/:assetId", async (req, res) => {
  * index.js, so requireAuth never sees it.
  */
 const posterRouter = express.Router();
-posterRouter.get("/:assetId", (req, res) => {
-  const id = Number(req.params.assetId);
-  if (!Number.isFinite(id)) return res.status(400).end();
-  if (!verifyPosterUrl(id, req.query.e, req.query.s)) return res.status(403).end();
-  const file = posterFile(id);
-  if (!hasPoster(id)) return res.status(404).end();
-  res.set("Content-Type", "image/jpeg");
-  res.set("Cache-Control", "private, max-age=3600");
-  fs.createReadStream(file).pipe(res);
+posterRouter.get("/:assetId", async (req, res) => {
+  // Every other handler in this file is wrapped; this one generates media on
+  // demand, so it has the most ways to fail (DB, S3, ffmpeg, disk). Without the
+  // wrapper a rejection here escapes an async handler, which Express 4 does not
+  // forward - the request hangs until the client times out and the process logs
+  // an unhandled rejection.
+  try {
+    const id = Number(req.params.assetId);
+    if (!Number.isFinite(id)) return res.status(400).end();
+    // Signature first: nothing below runs for an unsigned caller.
+    if (!verifyPosterUrl(id, req.query.e, req.query.s)) return res.status(403).end();
+
+    // A miss is normal, not an error: thumbnails are made on first view so the
+    // 5.6 GB chef_absence backlog is never fetched wholesale.
+    if (!hasPoster(id)) {
+      const [[asset]] = await pool.query(
+        `SELECT s3_key, size_bytes, content_type FROM media_asset WHERE id = ?`,
+        [id]
+      );
+      if (!asset) return res.status(404).end();
+      const made = await ensurePoster(id, asset.s3_key, {
+        headBytes: fetchBytesFor({
+          sizeBytes: asset.size_bytes,
+          isImage: String(asset.content_type || "").startsWith("image"),
+        }),
+      });
+      if (!made) return res.status(404).end();
+    }
+
+    res.set("Content-Type", "image/jpeg");
+    res.set("Cache-Control", "private, max-age=3600");
+    const stream = fs.createReadStream(posterFile(id));
+    // The file can vanish between hasPoster() and the open (cache eviction, a
+    // manual clear). Headers may already be sent by then, so the only safe move
+    // is to destroy the response rather than try to write a status onto it.
+    stream.on("error", () => {
+      if (!res.headersSent) res.status(404).end();
+      else res.destroy();
+    });
+    stream.pipe(res);
+  } catch (e) {
+    console.error("inference poster", e);
+    if (!res.headersSent) res.status(500).end();
+  }
 });
 
 /**
@@ -529,8 +602,8 @@ router.get("/stats", async (req, res) => {
 
     const where = [];
     const params = [];
-    if (dateRe.test(from)) { where.push("occurred_at >= (?::date AT TIME ZONE 'Asia/Kolkata')"); params.push(from); }
-    if (dateRe.test(to)) { where.push("occurred_at < ((?::date + 1) AT TIME ZONE 'Asia/Kolkata')"); params.push(to); }
+    if (dateRe.test(from)) { where.push("occurred_at >= (?::date::timestamp AT TIME ZONE 'Asia/Kolkata')"); params.push(from); }
+    if (dateRe.test(to)) { where.push("occurred_at < ((?::date + 1)::timestamp AT TIME ZONE 'Asia/Kolkata')"); params.push(to); }
     if (!where.length) { where.push("occurred_at > now() - (?::int * interval '1 day')"); params.push(days); }
     // Suppressed detections never appear in any chart.
     where.push(`NOT EXISTS (SELECT 1 FROM false_positive_detection f
@@ -585,6 +658,267 @@ router.get("/kitchen-unattended", async (req, res) => {
     });
   } catch (e) {
     console.error("inference kitchen-unattended", e);
+    res.status(500).json({ error: "server_error" });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// chef_absence
+//
+// Three artefact streams, so three list endpoints rather than one gallery:
+// absence clips, kitchen intrusions, and the people seen in the kitchen.
+//
+// CLIP LENGTH IS NOT ABSENCE DURATION. The service is documented as recording
+// only after 60 s of an empty kitchen, but 150 of 151 clips in the bucket are
+// shorter than that (median ~1 s) because the writer tags every clip 15 fps
+// while storing only the frames the detector emitted. clip_seconds is
+// therefore returned as clipSeconds - the length of the recording - and no KPI
+// is derived from it. See sql/chef_absence.sql.
+// ---------------------------------------------------------------------------
+
+/** Absence incidents: one row per unattended clip. */
+router.get("/chef-absence", async (req, res) => {
+  try {
+    const { page, pageSize, offset } = paginate(req);
+    const f = buildFilters(req, "c.started_at", "c.camera_key");
+    const w = [f.sql.replace(/^WHERE /, "")].filter(Boolean);
+    const params = [...f.params];
+    w.push(notFalsePositive("chef_absence", "c.id"));
+    const search = searchClause(req, ["c.camera_key", "c.id"]);
+    if (search) { w.push(search.sql); params.push(...search.params); }
+    const sql = `WHERE ${w.join(" AND ")}`;
+    const ord = orderBy(req, {
+      detectedAt: "c.started_at", camera: "c.camera_key", clip: "c.clip_seconds",
+    }, "c.started_at DESC");
+    await listEndpoint(res, {
+      countSql: `SELECT COUNT(*) AS total FROM chef_absence_incident c ${sql}`,
+      rowsSql: `SELECT c.id, c.camera_key, c.started_at, c.frame_count,
+                       c.clip_seconds AS "clipSeconds",
+                       m.s3_key, m.size_bytes, m.content_type, m.id AS asset_id
+                  FROM chef_absence_incident c LEFT JOIN media_asset m ON m.id = c.asset_id
+                  ${sql} ORDER BY ${ord} LIMIT ? OFFSET ?`,
+      params, page, pageSize, offset,
+    });
+  } catch (e) {
+    console.error("inference chef-absence", e);
+    res.status(500).json({ error: "server_error" });
+  }
+});
+
+/**
+ * Kitchen intrusions: one row per snapshot.
+ *
+ * The filename carries no camera id and nothing else in the artefact set
+ * supplies one, so a camera filter is deliberately NOT applied here - it would
+ * silently return nothing rather than "camera unknown".
+ */
+router.get("/chef-absence/intrusions", async (req, res) => {
+  try {
+    const { page, pageSize, offset } = paginate(req);
+    const f = buildFilters({ query: { from: req.query.from, to: req.query.to } }, "k.occurred_at", "k.camera_key");
+    const w = [f.sql.replace(/^WHERE /, "")].filter(Boolean);
+    const params = [...f.params];
+    w.push(notFalsePositive("chef_intrusion", "k.id"));
+    const sql = w.length ? `WHERE ${w.join(" AND ")}` : "";
+    const ord = orderBy(req, { detectedAt: "k.occurred_at", seq: "k.daily_seq" }, "k.occurred_at DESC");
+    await listEndpoint(res, {
+      countSql: `SELECT COUNT(*) AS total FROM kitchen_intrusion k ${sql}`,
+      rowsSql: `SELECT k.id, k.camera_key, k.occurred_at, k.daily_seq AS "dailySeq",
+                       m.s3_key, m.size_bytes, m.content_type, m.id AS asset_id
+                  FROM kitchen_intrusion k LEFT JOIN media_asset m ON m.id = k.asset_id
+                  ${sql} ORDER BY ${ord} LIMIT ? OFFSET ?`,
+      params, page, pageSize, offset,
+    });
+  } catch (e) {
+    console.error("inference chef intrusions", e);
+    res.status(500).json({ error: "server_error" });
+  }
+});
+
+/** People seen in the kitchen, with their classification and crop. */
+router.get("/chef-absence/detections", async (req, res) => {
+  try {
+    const { page, pageSize, offset } = paginate(req);
+    const f = buildFilters(req, "d.detected_at", "d.camera_key");
+    const w = [f.sql.replace(/^WHERE /, "")].filter(Boolean);
+    const params = [...f.params];
+    w.push(notFalsePositive("chef_detection", "d.id"));
+
+    const status = String(req.query.status || "").trim();
+    if (status) { w.push(`d.status_chef = ?`); params.push(status); }
+    // "Who is not wearing a cap" is the question this module exists to answer,
+    // so it is a first-class filter rather than something to eyeball.
+    if (String(req.query.noCap || "") === "1") w.push(`d.cap_garment IS NULL`);
+
+    const search = searchClause(req, ["d.camera_key", "d.status_chef", "d.upper_garment", "d.track_id"]);
+    if (search) { w.push(search.sql); params.push(...search.params); }
+    const sql = `WHERE ${w.join(" AND ")}`;
+    const ord = orderBy(req, {
+      detectedAt: "d.detected_at", camera: "d.camera_key",
+      status: "d.status_chef", confidence: "d.confidence",
+    }, "d.detected_at DESC");
+
+    await listEndpoint(res, {
+      countSql: `SELECT COUNT(*) AS total FROM chef_detection d ${sql}`,
+      rowsSql: `SELECT d.id, d.camera_key, d.detected_at, d.track_id,
+                       d.status_chef AS "statusChef", d.confidence,
+                       d.upper_garment AS "upperGarment", d.lower_garment AS "lowerGarment",
+                       d.cap_garment AS "capGarment",
+                       (d.cap_garment IS NOT NULL) AS "hasCap",
+                       m.s3_key, m.size_bytes, m.content_type, m.id AS asset_id
+                  FROM chef_detection d LEFT JOIN media_asset m ON m.id = d.crop_asset_id
+                  ${sql} ORDER BY ${ord} LIMIT ? OFFSET ?`,
+      params, page, pageSize, offset,
+    });
+  } catch (e) {
+    console.error("inference chef detections", e);
+    res.status(500).json({ error: "server_error" });
+  }
+});
+
+/**
+ * The chef_absence KPI block.
+ *
+ * Built from the counts and classifications that are trustworthy - incidents,
+ * intrusions, who was in the kitchen, and whether they wore headwear. Absence
+ * duration is absent by design; see the note at the top of this section.
+ */
+router.get("/chef-absence/kpis", async (req, res) => {
+  try {
+    const inc = buildFilters(req, "c.started_at", "c.camera_key");
+    const det = buildFilters(req, "d.detected_at", "d.camera_key");
+    const intr = buildFilters({ query: { from: req.query.from, to: req.query.to } }, "k.occurred_at", "k.camera_key");
+
+    const incWhere = `WHERE ${[inc.sql.replace(/^WHERE /, ""), notFalsePositive("chef_absence", "c.id")].filter(Boolean).join(" AND ")}`;
+    const detWhere = `WHERE ${[det.sql.replace(/^WHERE /, ""), notFalsePositive("chef_detection", "d.id")].filter(Boolean).join(" AND ")}`;
+    const intrWhere = `WHERE ${[intr.sql.replace(/^WHERE /, ""), notFalsePositive("chef_intrusion", "k.id")].filter(Boolean).join(" AND ")}`;
+
+    const [[incidents]] = await pool.query(
+      `SELECT COUNT(*) AS "total",
+              COUNT(DISTINCT c.camera_key) AS "cameras",
+              MAX(c.started_at) AS "latest",
+              MIN(c.clip_seconds) AS "minClip",
+              MAX(c.clip_seconds) AS "maxClip",
+              AVG(c.clip_seconds)::numeric(10,2) AS "avgClip",
+              COUNT(*) FILTER (WHERE c.clip_seconds >= 60) AS "clipsOver60s"
+         FROM chef_absence_incident c ${incWhere}`,
+      inc.params
+    );
+    const [[people]] = await pool.query(
+      `SELECT COUNT(*) AS "total",
+              COUNT(*) FILTER (WHERE d.status_chef = 'chef')         AS "chef",
+              COUNT(*) FILTER (WHERE d.status_chef = 'non-chef')     AS "nonChef",
+              COUNT(*) FILTER (WHERE d.status_chef = 'housekeeping') AS "housekeeping",
+              COUNT(*) FILTER (WHERE d.cap_garment IS NOT NULL)      AS "withCap",
+              COUNT(*) FILTER (WHERE d.status_chef = 'chef' AND d.cap_garment IS NOT NULL) AS "chefWithCap",
+              MAX(d.detected_at) AS "latest"
+         FROM chef_detection d ${detWhere}`,
+      det.params
+    );
+    const [[intrusions]] = await pool.query(
+      `SELECT COUNT(*) AS "total", MAX(k.occurred_at) AS "latest"
+         FROM kitchen_intrusion k ${intrWhere}`,
+      intr.params
+    );
+    const [peak] = await pool.query(
+      `SELECT EXTRACT(HOUR FROM c.started_at AT TIME ZONE 'Asia/Kolkata')::int AS "hour",
+              COUNT(*) AS "n"
+         FROM chef_absence_incident c ${incWhere}
+        GROUP BY 1 ORDER BY "n" DESC, "hour" ASC LIMIT 1`,
+      inc.params
+    );
+
+    const chefTotal = Number(people.chef || 0);
+    const chefCapped = Number(people.chefWithCap || 0);
+
+    res.json({
+      module: "chef_absence",
+      incidents: Number(incidents.total || 0),
+      cameras: Number(incidents.cameras || 0),
+      latestIncident: incidents.latest,
+      intrusions: Number(intrusions.total || 0),
+      latestIntrusion: intrusions.latest,
+      peopleSeen: Number(people.total || 0),
+      chef: chefTotal,
+      nonChef: Number(people.nonChef || 0),
+      housekeeping: Number(people.housekeeping || 0),
+      // Food-hygiene compliance: the share of chef sightings with headwear
+      // detected. Null rather than 0 when no chef was seen, so the UI can say
+      // "no data" instead of implying total non-compliance.
+      capCompliancePct: chefTotal ? Number(((chefCapped / chefTotal) * 100).toFixed(1)) : null,
+      chefWithCap: chefCapped,
+      chefWithoutCap: chefTotal - chefCapped,
+      peakHour: peak.length ? Number(peak[0].hour) : null,
+      peakHourCount: peak.length ? Number(peak[0].n) : 0,
+      // Recording length, reported for completeness only.
+      clip: {
+        minSeconds: incidents.minClip == null ? null : Number(incidents.minClip),
+        maxSeconds: incidents.maxClip == null ? null : Number(incidents.maxClip),
+        avgSeconds: incidents.avgClip == null ? null : Number(incidents.avgClip),
+        over60s: Number(incidents.clipsOver60s || 0),
+        isAbsenceDuration: false,
+      },
+    });
+  } catch (e) {
+    console.error("inference chef kpis", e);
+    res.status(500).json({ error: "server_error" });
+  }
+});
+
+/** Charts for the chef_absence dashboard. */
+router.get("/chef-absence/analytics", async (req, res) => {
+  try {
+    const inc = buildFilters(req, "c.started_at", "c.camera_key");
+    const det = buildFilters(req, "d.detected_at", "d.camera_key");
+    const intr = buildFilters({ query: { from: req.query.from, to: req.query.to } }, "k.occurred_at", "k.camera_key");
+
+    const incWhere = `WHERE ${[inc.sql.replace(/^WHERE /, ""), notFalsePositive("chef_absence", "c.id")].filter(Boolean).join(" AND ")}`;
+    const detWhere = `WHERE ${[det.sql.replace(/^WHERE /, ""), notFalsePositive("chef_detection", "d.id")].filter(Boolean).join(" AND ")}`;
+    const intrWhere = `WHERE ${[intr.sql.replace(/^WHERE /, ""), notFalsePositive("chef_intrusion", "k.id")].filter(Boolean).join(" AND ")}`;
+
+    const incLocal = `c.started_at AT TIME ZONE 'Asia/Kolkata'`;
+    const detLocal = `d.detected_at AT TIME ZONE 'Asia/Kolkata'`;
+    const intrLocal = `k.occurred_at AT TIME ZONE 'Asia/Kolkata'`;
+
+    const [byDay] = await pool.query(
+      `SELECT (${incLocal})::date AS "day", COUNT(*) AS "n"
+         FROM chef_absence_incident c ${incWhere} GROUP BY 1 ORDER BY 1`, inc.params);
+    const [byHour] = await pool.query(
+      `SELECT EXTRACT(HOUR FROM ${incLocal})::int AS "hour", COUNT(*) AS "n"
+         FROM chef_absence_incident c ${incWhere} GROUP BY 1 ORDER BY 1`, inc.params);
+    const [byCamera] = await pool.query(
+      `SELECT c.camera_key AS "cameraKey", COUNT(*) AS "n", MAX(c.started_at) AS "latest"
+         FROM chef_absence_incident c ${incWhere} GROUP BY 1 ORDER BY "n" DESC`, inc.params);
+
+    // Who was in the kitchen, per day - the mix is the story, not the total.
+    const [presenceByDay] = await pool.query(
+      `SELECT (${detLocal})::date AS "day",
+              COUNT(*) FILTER (WHERE d.status_chef = 'chef')         AS "chef",
+              COUNT(*) FILTER (WHERE d.status_chef = 'non-chef')     AS "nonChef",
+              COUNT(*) FILTER (WHERE d.status_chef = 'housekeeping') AS "housekeeping"
+         FROM chef_detection d ${detWhere} GROUP BY 1 ORDER BY 1`, det.params);
+
+    const [capByStatus] = await pool.query(
+      `SELECT COALESCE(d.status_chef, 'unknown') AS "statusChef",
+              COUNT(*) AS "total",
+              COUNT(*) FILTER (WHERE d.cap_garment IS NOT NULL) AS "withCap"
+         FROM chef_detection d ${detWhere} GROUP BY 1 ORDER BY "total" DESC`, det.params);
+
+    const [intrusionsByDay] = await pool.query(
+      `SELECT (${intrLocal})::date AS "day", COUNT(*) AS "n"
+         FROM kitchen_intrusion k ${intrWhere} GROUP BY 1 ORDER BY 1`, intr.params);
+    const [intrusionsByHour] = await pool.query(
+      `SELECT EXTRACT(HOUR FROM ${intrLocal})::int AS "hour", COUNT(*) AS "n"
+         FROM kitchen_intrusion k ${intrWhere} GROUP BY 1 ORDER BY 1`, intr.params);
+
+    res.json({
+      module: "chef_absence",
+      byDay, byHour, byCamera,
+      presenceByDay, capByStatus,
+      intrusionsByDay, intrusionsByHour,
+    });
+  } catch (e) {
+    console.error("inference chef analytics", e);
     res.status(500).json({ error: "server_error" });
   }
 });
@@ -702,7 +1036,11 @@ router.post("/feedback", async (req, res) => {
   const module = String(body.module || "").trim();
   const detectionId = Number(body.detectionId);
   const type = String(body.feedbackType || "").trim();
-  if (!MODULES[module] && module !== "kitchen_unattended") {
+  // chef_intrusion and chef_detection are separate feedback streams rather
+  // than tables in MODULES: a false-positive intrusion snapshot and a
+  // misclassified person are different judgements about different rows, so
+  // they must not share a suppression namespace with the absence clips.
+  if (!MODULES[module] && !FEEDBACK_ONLY_MODULES.has(module)) {
     return res.status(400).json({ error: "bad_request", message: "unknown module" });
   }
   if (!Number.isFinite(detectionId)) {
@@ -799,6 +1137,9 @@ router.get("/export/:module.csv", async (req, res) => {
       : req.params.module === "kitchen_unattended" ? ", k.duration_seconds"
       : req.params.module === "walkins" ? ", d.track_id, d.confidence, d.upper_garment, d.lower_garment"
       : req.params.module === "after_hours" ? ", s.tag"
+      // clip_seconds is the recording length, not the absence duration - the
+      // column name says so rather than letting a spreadsheet assume otherwise.
+      : req.params.module === "chef_absence" ? ", c.frame_count, c.clip_seconds AS clip_length_seconds"
       : "";
     const [rows] = await pool.query(
       `SELECT ${m.alias}.id, ${m.cam} AS camera, ${m.ts} AS detected_at${extra}

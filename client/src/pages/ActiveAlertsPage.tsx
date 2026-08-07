@@ -19,16 +19,29 @@ import { useAutoRefreshMs } from "../lib/useAppSettings";
 
 // Active Alerts is the cross-module view of everything that warrants attention.
 //
-// Walk-ins are footfall, not an alert, so they are excluded - the alert modules
-// are intrusion, loitering, after-hours and kitchen-unattended. Counts come from
-// the same suppressed row set the Monitoring pages and the Dashboard use, so a
-// thumbs-down moves all three together and they can never disagree.
+// Walk-ins ARE shown here, by explicit request, but they are not an alert -
+// they are footfall. So they get a card and a bar for context, while "Total
+// alerts" deliberately excludes them; adding 57 entries to an alert count would
+// misreport how much needed attention. The card and bar are labelled
+// "Walk-ins (activity)" so the distinction survives a glance.
+//
+// Counts come from the same suppressed row set the Monitoring pages and the
+// Dashboard use, so a thumbs-down moves all three together and they can never
+// disagree.
 //
 // This replaces a page that queried the legacy `crowds` table, which has no
 // production writer and returns zero rows.
 
-const ALERT_MODULES: InferenceModuleKey[] = ["intrusion", "loitering", "after_hours", "kitchen_unattended"];
-const PAGE_SIZE = 25;
+// Everything the page tracks, alerts first. chef_absence is included: it is an
+// alert module (the cooking station was left unmanned), and omitting it would
+// repeat the bug where a new module is invisible everywhere but its own page.
+const ALERT_MODULES: InferenceModuleKey[] = [
+  "intrusion", "loitering", "after_hours", "kitchen_unattended", "chef_absence",
+];
+// Walk-ins are tracked and displayed, but never counted as an alert.
+const CONTEXT_MODULES: InferenceModuleKey[] = ["walkins"];
+const TRACKED_MODULES: InferenceModuleKey[] = [...ALERT_MODULES, ...CONTEXT_MODULES];
+const PAGE_SIZE = 20;
 const INK = "rgba(0,0,0,.45)";
 const GRID = "rgba(0,0,0,.08)";
 
@@ -54,9 +67,9 @@ export function ActiveAlertsPage() {
     return p;
   }, [from, to, camera]);
 
-  // One KPI query per alert module - the same endpoint the Monitoring pages use,
-  // so the tiles here and there are guaranteed to match.
-  const kpiQueries = ALERT_MODULES.map((m) => ({
+  // One KPI query per tracked module - the same endpoint the Monitoring pages
+  // use, so the tiles here and there are guaranteed to match.
+  const kpiQueries = TRACKED_MODULES.map((m) => ({
     key: m,
     // eslint-disable-next-line react-hooks/rules-of-hooks
     q: useQuery({
@@ -70,13 +83,12 @@ export function ActiveAlertsPage() {
     queryFn: async () => {
       const params: Record<string, string | number> = { page, pageSize: PAGE_SIZE, ...scope };
       if (service) params.service = service;
-      const d = (await api.get("/inference/timeline", { params })).data as {
+      // Walk-ins are no longer filtered out of the table: they are shown as
+      // activity alongside the alerts, and the "Alert type" control still
+      // narrows to a single module when one is chosen.
+      return (await api.get("/inference/timeline", { params })).data as {
         total: number; rows: TimelineRow[];
       };
-      // The timeline includes walk-ins; alerts exclude them.
-      return service
-        ? d
-        : { total: d.total, rows: d.rows.filter((r) => r.service !== "walkins") };
     },
     refetchInterval,
   });
@@ -119,16 +131,26 @@ export function ActiveAlertsPage() {
 
   const cameraOptions = useMemo(() => {
     const all = camerasQ.data?.cameras || [];
-    return all.filter((c) => (service ? c.service === service : ALERT_MODULES.includes(c.service as InferenceModuleKey)));
+    return all.filter((c) => (service ? c.service === service : TRACKED_MODULES.includes(c.service as InferenceModuleKey)));
   }, [camerasQ.data, service]);
 
   const chartData = kpiQueries.map(({ key, q }) => ({
     key,
-    label: MODULE_BY_KEY[key].label,
+    // A failed query used to fall through `?? 0` and print a confident zero -
+    // indistinguishable from "no alerts". Carry the error so the tile can say
+    // it does not know.
+    failed: q.isError,
+    // Walk-ins carry their nature in the label so a bar of 57 entries is never
+    // read as 57 alerts.
+    label: CONTEXT_MODULES.includes(key) ? `${MODULE_BY_KEY[key].label} (activity)` : MODULE_BY_KEY[key].label,
     colour: MODULE_BY_KEY[key].colour,
+    isAlert: ALERT_MODULES.includes(key),
     n: q.data?.total ?? 0,
   }));
-  const totalAlerts = chartData.reduce((a, r) => a + r.n, 0);
+  // Alerts only. Walk-ins are displayed beside them but are not added in.
+  const alertRows = chartData.filter((r) => r.isAlert);
+  const anyFailed = alertRows.some((r) => r.failed);
+  const totalAlerts = alertRows.reduce((a, r) => a + r.n, 0);
   const loading = kpiQueries.some((k) => k.q.isLoading);
 
   const rows = rowsQ.data?.rows || [];
@@ -136,27 +158,39 @@ export function ActiveAlertsPage() {
   // resolved per row rather than fixed for the page.
   const rowModule = (r: TimelineRow) => MODULE_BY_KEY[(r.service as InferenceModuleKey)] ?? MODULE_BY_KEY.intrusion;
 
+  // The table's column set, restricted to what the timeline view can actually
+  // supply for every row regardless of which module produced it.
+  const maskedModule = useMemo(() => {
+    const base = service ? MODULE_BY_KEY[service as InferenceModuleKey] : MODULE_BY_KEY.intrusion;
+    return {
+      ...base,
+      capabilities: { ...base.capabilities, confidence: false, appearance: false },
+    };
+  }, [service]);
+
   return (
     <Box sx={pageLayoutSx}>
-      <Box>
-        <Typography variant="h5" sx={{ fontWeight: 800 }}>Active Alerts</Typography>
-        <Typography variant="body2" color="text.secondary">
-          Intrusion, loitering, after-hours and kitchen alerts across all connected cameras.
-        </Typography>
-      </Box>
-
+      {/* No in-page title block: the shell header already renders "Active
+          Alerts" and its description, so repeating them here pushed the KPI
+          cards down behind a duplicate heading. */}
       <Grid container spacing={1.5}>
-        <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
+        <Grid size={{ xs: 12, sm: 6, md: 12 / 7 }}>
           <Paper sx={{ ...contentCardSx, p: 1.75, height: "100%" }}>
             <Typography variant="caption" color="text.secondary">Total alerts</Typography>
             {loading ? <Skeleton width="60%" height={32} /> : (
-              <Typography sx={{ fontWeight: 800, fontSize: 26 }}>{totalAlerts}</Typography>
+              <Typography sx={{ fontWeight: 800, fontSize: 26 }}>
+                {anyFailed ? "—" : totalAlerts}
+              </Typography>
             )}
-            <Typography variant="caption" color="text.secondary">in selected range</Typography>
+            <Typography variant="caption" color="text.secondary">
+              {anyFailed ? "some modules did not load" : "in selected range"}
+            </Typography>
           </Paper>
         </Grid>
+        {/* Seven equal columns: the total plus six modules. Each card carries
+            the same height so the row stays on one baseline. */}
         {chartData.map((c) => (
-          <Grid key={c.key} size={{ xs: 6, sm: 6, md: 2.4 }}>
+          <Grid key={c.key} size={{ xs: 6, sm: 6, md: 12 / 7 }}>
             <Paper
               onClick={() => navigate(MODULE_BY_KEY[c.key].route)}
               sx={{
@@ -169,9 +203,11 @@ export function ActiveAlertsPage() {
                 <Typography variant="caption" color="text.secondary" noWrap>{c.label}</Typography>
               </Stack>
               {loading ? <Skeleton width="50%" height={30} /> : (
-                <Typography sx={{ fontWeight: 800, fontSize: 26 }}>{c.n}</Typography>
+                <Typography sx={{ fontWeight: 800, fontSize: 26 }}>{c.failed ? "—" : c.n}</Typography>
               )}
-              <Typography variant="caption" color="text.secondary">open module</Typography>
+              <Typography variant="caption" color="text.secondary">
+                {c.failed ? "could not load" : "open module"}
+              </Typography>
             </Paper>
           </Grid>
         ))}
@@ -181,8 +217,8 @@ export function ActiveAlertsPage() {
         <Stack direction="row" sx={{ flexWrap: "wrap", gap: 1.5, alignItems: "center" }}>
           <TextField select label="Alert type" size="small" value={service}
                      onChange={(e) => { setService(e.target.value); setPage(1); setCamera(""); }} sx={filterFieldSx}>
-            <MenuItem value="">All alert types</MenuItem>
-            {ALERT_MODULES.map((m) => (
+            <MenuItem value="">All types</MenuItem>
+            {TRACKED_MODULES.map((m) => (
               <MenuItem key={m} value={m}>{MODULE_BY_KEY[m].label}</MenuItem>
             ))}
           </TextField>
@@ -201,7 +237,8 @@ export function ActiveAlertsPage() {
           </TextField>
           <Box sx={{ flex: 1 }} />
           <Typography variant="body2" color="text.secondary">
-            {rowsQ.data?.total ?? 0} alerts
+            {/* The timeline total includes walk-ins, which are not alerts. */}
+            {rowsQ.data?.total ?? 0} records
           </Typography>
         </Stack>
       </Paper>
@@ -209,7 +246,8 @@ export function ActiveAlertsPage() {
       <Paper sx={{ ...contentCardSx }}>
         <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>Alerts by type</Typography>
         <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
-          Each bar carries its module's own colour, matching the Monitoring pages.
+          Each bar carries its module's own colour, matching the Monitoring pages. Walk-ins are
+          shown for context and are not counted in the alert total.
         </Typography>
         <Box sx={{ height: 190 }}>
           <ResponsiveContainer width="100%" height="100%">
@@ -219,7 +257,10 @@ export function ActiveAlertsPage() {
               <YAxis allowDecimals={false} width={32} tick={{ fontSize: 10, fill: INK }}
                      axisLine={false} tickLine={false} tickMargin={4} />
               <RTooltip cursor={{ fill: "rgba(0,0,0,.04)" }}
-                        formatter={(v) => [Number(v ?? 0), "alerts"] as [number, string]}
+                        formatter={(v, _n, p) => [
+                          Number(v ?? 0),
+                          (p?.payload as { isAlert?: boolean })?.isAlert === false ? "entries" : "alerts",
+                        ] as [number, string]}
                         contentStyle={{ fontSize: 12, borderRadius: 8 }} />
               <Bar dataKey="n" radius={[4, 4, 0, 0]} maxBarSize={54}>
                 {chartData.map((c) => <Cell key={c.key} fill={c.colour} />)}
@@ -233,7 +274,16 @@ export function ActiveAlertsPage() {
         <Typography variant="subtitle1" sx={{ fontWeight: 800, mb: 1 }}>Alert events</Typography>
         {rowsQ.isError && <Alert severity="error" sx={{ mb: 1 }}>Could not load alerts.</Alert>}
         <MonitoringEventsTable
-          module={service ? MODULE_BY_KEY[service as InferenceModuleKey] : MODULE_BY_KEY.intrusion}
+          // Columns come from this module's capabilities, but /inference/timeline
+          // only projects camera/time/duration/identity - it carries no
+          // confidence and no garment colours. Selecting Walk-ins would
+          // otherwise add Confidence and Appearance columns that are empty in
+          // every row, so those two are masked off here.
+          module={maskedModule}
+          // Every row states its own module. Without this the whole table wore
+          // the fallback's "Intrusion" chip, mislabelling every loitering,
+          // after-hours and chef-absence row on the page.
+          moduleForRow={(r) => rowModule(r as TimelineRow)}
           rows={rows.map((r) => ({ ...r, detected_at: r.occurred_at }))}
           total={rowsQ.data?.total ?? 0}
           page={page}

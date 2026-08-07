@@ -8,8 +8,8 @@ export const theme = createTheme({
   palette: {
     mode: "light",
     primary: { main: pnp.primary, light: "#D9AE45", dark: pnp.primaryDark, contrastText: "#FFFFFF" },
-    secondary: { main: pnp.navy, light: "#7E3F5B", dark: "#3B0E1B", contrastText: "#FFFFFF" },
-    info: { main: "#7E3F5B", light: "#A0688A", dark: "#5E1A2B", contrastText: "#FFFFFF" },
+    secondary: { main: pnp.navy, light: "#7E3F5B", dark: "#2C3D1B", contrastText: "#FFFFFF" },
+    info: { main: "#7E3F5B", light: "#A0688A", dark: "#4A6630", contrastText: "#FFFFFF" },
     success: { main: pnp.success, light: "#4ADE80", dark: "#166534", contrastText: "#FFFFFF" },
     error: { main: pnp.danger, light: "#E57373", dark: "#8C1D18", contrastText: "#FFFFFF" },
     warning: { main: pnp.warning, light: "#FB923C", dark: "#9A3412", contrastText: "#FFFFFF" },
@@ -80,9 +80,9 @@ export const theme = createTheme({
         {
           props: { variant: "contained", color: "primary" },
           style: {
-            backgroundImage: "linear-gradient(180deg, #D9AE45 0%, #B8860B 100%)",
+            backgroundImage: "linear-gradient(180deg, #D9AE45 0%, #C08529 100%)",
             boxShadow: "0 2px 8px rgba(184, 134, 11, 0.3)",
-            "&:hover": { backgroundImage: "linear-gradient(180deg, #B8860B 0%, #946A08 100%)" },
+            "&:hover": { backgroundImage: "linear-gradient(180deg, #C08529 0%, #8F6119 100%)" },
           },
         },
       ],

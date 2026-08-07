@@ -393,7 +393,7 @@ export function VehicleJourneyPage() {
           </Paper>
 
           <Box sx={{ display: "grid", gridTemplateColumns: { xs: "repeat(2, 1fr)", md: "repeat(3, 1fr)", lg: "repeat(6, 1fr)" }, gap: 1.25 }}>
-            <SummaryTile icon={<PlaceOutlinedIcon fontSize="small" />} label="Subject" value={data.plate} accent="#B8860B" />
+            <SummaryTile icon={<PlaceOutlinedIcon fontSize="small" />} label="Subject" value={data.plate} accent="#C08529" />
             <SummaryTile icon={<CalendarTodayOutlinedIcon fontSize="small" />} label="First seen" value={data.summary.firstSeen} sub={`at ${data.summary.firstSeenSite}`} accent="#16a34a" />
             <SummaryTile icon={<CalendarTodayOutlinedIcon fontSize="small" />} label="Last seen" value={data.summary.lastSeen} sub={`at ${data.summary.lastSeenSite}`} accent="#f59e0b" />
             <SummaryTile icon={<VideocamOutlinedIcon fontSize="small" />} label="Camera hits" value={String(data.summary.totalHits)} sub="Detections" accent="#7c3aed" />

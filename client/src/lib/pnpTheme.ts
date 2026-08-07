@@ -1,21 +1,39 @@
 
+// Biryani Katha brand palette, taken verbatim from the :root custom properties
+// on biryanikatha.com:
+//   --green #3E5626   --mustard #C08529   --cream #FADD9D   --grey #DFDFDF
+// plus the secondary leaf green #3E7D2C used on the site's accents.
+//
+// Only the brand-bearing surfaces move to these values - sidebar, footer, nav
+// active state, primary accents. The enterprise dashboard's card/table/page
+// structure is unchanged; this is a repalette, not a redesign.
+export const brand = {
+  green: "#3E5626",
+  greenDeep: "#2C3D1B",
+  greenLeaf: "#3E7D2C",
+  mustard: "#C08529",
+  mustardDark: "#8F6119",
+  cream: "#FADD9D",
+  grey: "#DFDFDF",
+} as const;
+
 export const pnp = {
 
-  navy: "#4A1220",
-  navySidebar: "#4A1220",
-  navyMuted: "#5E1A2B",
-  pageBg: "#FAF7F2",
+  navy: brand.green,
+  navySidebar: brand.green,
+  navyMuted: "#4A6630",
+  pageBg: "#FAF8F2",
   headerBg: "#FFFFFF",
-  footerBg: "#3B0E1B",
+  footerBg: brand.greenDeep,
 
   cardBg: "#FFFFFF",
   cardRadius: 10,
-  cardBorder: "1px solid rgba(74, 18, 32, 0.09)",
-  cardShadow: "0 1px 3px rgba(59, 14, 27, 0.07), 0 4px 16px rgba(59, 14, 27, 0.05)",
+  cardBorder: "1px solid rgba(62, 86, 38, 0.12)",
+  cardShadow: "0 1px 3px rgba(44, 61, 27, 0.07), 0 4px 16px rgba(44, 61, 27, 0.05)",
 
-  primary: "#B8860B",
-  primaryDark: "#946A08",
-  primarySoft: "#FBF3DE",
+  primary: brand.mustard,
+  primaryDark: brand.mustardDark,
+  primarySoft: "#FDF4DF",
   success: "#15803D",
   successSoft: "#DCFCE7",
   danger: "#B3261E",
@@ -27,20 +45,23 @@ export const pnp = {
   amber: "#D9AE45",
   amberSoft: "#FEF6E0",
 
-  text: "#2A1A12",
-  textSecondary: "#7A6455",
-  textMuted: "#A8968A",
+  text: "#1F2A16",
+  textSecondary: "#5F6B52",
+  textMuted: "#95A088",
 
-  navActiveGradient: "linear-gradient(90deg, #946A08 0%, #B8860B 55%, #D9AE45 100%)",
-  navActiveBar: "#F2D68A",
-  navText: "rgba(245, 232, 214, 0.9)",
-  navTextMuted: "rgba(214, 191, 165, 0.85)",
+  // Weighted toward the dark end of the mustard so white nav text clears 4.5:1
+  // across the whole pill - the brightest brand mustard alone only reaches
+  // ~3.2:1 against white, which the sidebar's 14px label cannot carry.
+  navActiveGradient: `linear-gradient(90deg, #7A5415 0%, ${brand.mustardDark} 60%, #A8731F 100%)`,
+  navActiveBar: brand.cream,
+  navText: "rgba(245, 245, 235, 0.9)",
+  navTextMuted: "rgba(222, 226, 210, 0.85)",
 
-  loginBg: "#2B0810",
-  mapDark: "#3B0E1B",
+  loginBg: "#243117",
+  mapDark: brand.greenDeep,
 
-  kpiBlue: "#B8860B",
-  kpiGreen: "#15803D",
+  kpiBlue: brand.mustard,
+  kpiGreen: brand.greenLeaf,
   kpiRed: "#B3261E",
   kpiPurple: "#7E3F5B",
   kpiOrange: "#C2410C",
@@ -69,7 +90,7 @@ export const pnpNavItemSx = (selected: boolean) => ({
   bgcolor: selected ? "transparent" : "transparent",
   background: selected ? pnp.navActiveGradient : "transparent",
   color: selected ? "#FFFFFF" : pnp.navText,
-  boxShadow: selected ? "0 4px 14px rgba(184, 134, 11, 0.35)" : "none",
+  boxShadow: selected ? "0 4px 14px rgba(143, 97, 25, 0.38)" : "none",
   "&::before": selected
     ? {
         content: '""',
@@ -83,8 +104,8 @@ export const pnpNavItemSx = (selected: boolean) => ({
       }
     : {},
   "&:hover": {
-    bgcolor: selected ? undefined : "rgba(242, 214, 138, 0.1)",
-    background: selected ? pnp.navActiveGradient : "rgba(242, 214, 138, 0.1)",
+    bgcolor: selected ? undefined : "rgba(250, 221, 157, 0.12)",
+    background: selected ? pnp.navActiveGradient : "rgba(250, 221, 157, 0.12)",
   },
   "& .MuiListItemIcon-root": {
     color: "inherit",

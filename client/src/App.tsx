@@ -19,6 +19,7 @@ import { KnownFacesPage } from "./pages/KnownFacesPage";
 import { DailyBriefingPage } from "./pages/DailyBriefingPage";
 import { InferenceViewerPage } from "./pages/InferenceViewerPage";
 import { MonitoringPage } from "./pages/MonitoringPage";
+import { ChefAbsencePage } from "./pages/ChefAbsencePage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { PermissionsProvider, RequirePage } from "./lib/permissions";
 
@@ -44,6 +45,11 @@ export default function App() {
           <Route path="/watchlists/rules" element={<WatchlistsPage />} />
           <Route path="/known-faces" element={<RequirePage page="known_faces" label="Known Faces"><KnownFacesPage /></RequirePage>} />
           {/* One template, five modules - resolved from the :module slug. */}
+          {/* Chef Absence reports on station coverage and uniform compliance
+              rather than listing detections, so it has its own page instead of
+              the shared Monitoring template. Declared before the :module route
+              for clarity; the static segment wins regardless. */}
+          <Route path="/monitoring/chef-absence" element={<ChefAbsencePage />} />
           <Route path="/monitoring/:module" element={<MonitoringPage />} />
           <Route path="/monitoring" element={<Navigate to="/monitoring/walkins" replace />} />
           <Route path="/settings" element={<RequirePage page="settings" label="Settings"><SettingsPage /></RequirePage>} />

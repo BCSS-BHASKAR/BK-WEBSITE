@@ -12,10 +12,12 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import InboxOutlinedIcon from "@mui/icons-material/InboxOutlined";
 import { api } from "../../lib/api";
 import { contentCardSx } from "../../lib/uiSurfaces";
 import { MODULE_BY_KEY, type InferenceModuleKey } from "../../lib/inferenceModules";
 import { useAutoRefreshMs } from "../../lib/useAppSettings";
+import { usePermissions } from "../../lib/permissions";
 import { MonitoringMediaViewer } from "../monitoring/MonitoringMediaViewer";
 import type { MonitoringRow } from "../monitoring/MonitoringEventsTable";
 
@@ -30,18 +32,30 @@ import type { MonitoringRow } from "../monitoring/MonitoringEventsTable";
 // never repaint a series.
 // ---------------------------------------------------------------------------
 const SERVICE_COLOUR: Record<string, string> = {
-  walkins: "#2a78d6",     // slot 1 blue
-  loitering: "#eb6834",   // slot 2 orange
-  intrusion: "#1baf7a",   // slot 3 aqua
-  after_hours: "#eda100", // slot 4 yellow
+  walkins: "#2a78d6",      // slot 1 blue
+  loitering: "#eb6834",    // slot 2 orange
+  intrusion: "#1baf7a",    // slot 3 aqua
+  after_hours: "#eda100",  // slot 4 yellow
+  chef_absence: "#c2408c", // slot 6 magenta
 };
 const SERVICE_LABEL: Record<string, string> = {
   walkins: "Walk-ins",
   loitering: "Loitering",
   intrusion: "Intrusion",
   after_hours: "After Hours",
+  chef_absence: "Chef Absence",
 };
-const SERVICES = ["walkins", "loitering", "intrusion", "after_hours"] as const;
+// The modules the dashboard reports on. kitchen_unattended is deliberately
+// absent: chef_absence is the module that actually records unmanned-station
+// incidents at this site, so carrying both showed the same concern twice - once
+// under a name that never had any events behind it.
+const SERVICES = [
+  "walkins", "loitering", "intrusion", "after_hours", "chef_absence",
+] as const;
+
+// Everything that warrants attention, i.e. every module except walk-ins.
+// Walk-ins are footfall, not something to act on.
+const ALERT_SERVICES = ["loitering", "intrusion", "after_hours", "chef_absence"] as const;
 
 // Recessive grid/axis ink; text never wears a series colour.
 const INK_MUTED = "rgba(0,0,0,.45)";
@@ -70,13 +84,7 @@ function fmtDateTime(ts?: string | null) {
     hour: "2-digit", minute: "2-digit", hour12: false,
   });
 }
-function fmtBytes(n?: number | string | null) {
-  const v = Number(n || 0);
-  if (!v) return "0";
-  if (v > 1073741824) return `${(v / 1073741824).toFixed(1)} GB`;
-  if (v > 1048576) return `${(v / 1048576).toFixed(0)} MB`;
-  return `${Math.round(v / 1024)} KB`;
-}
+// fmtBytes was removed with the "Media stored" tile - it had no other caller.
 
 /** Hero/stat tile. A single headline number is a tile, never a one-bar chart. */
 function StatTile({ label, value, hint, accent, onClick }: {
@@ -118,9 +126,33 @@ function ChartCard({ title, subtitle, height = 190, children }: {
   );
 }
 
+/**
+ * Stands in for a chart that has nothing to plot.
+ *
+ * An axis drawn over an all-zero series reads as a measured flat line, which is
+ * a different claim from "this module recorded nothing in this period". The
+ * modules that are quiet still get their card, so the set of five stays whole.
+ */
+function NoData({ label = "No events recorded in this period" }: { label?: string }) {
+  return (
+    <Box
+      sx={{
+        height: "100%", display: "flex", flexDirection: "column",
+        alignItems: "center", justifyContent: "center", gap: 0.75,
+        border: "1px dashed rgba(15,23,42,.14)", borderRadius: 1.5,
+        px: 1.5, textAlign: "center",
+      }}
+    >
+      <InboxOutlinedIcon sx={{ fontSize: 22, color: "text.disabled" }} />
+      <Typography variant="caption" color="text.secondary">{label}</Typography>
+    </Box>
+  );
+}
+
 export function InferenceAnalyticsView({ from, to }: { from?: string; to?: string } = {}) {
   const navigate = useNavigate();
   const refetchInterval = useAutoRefreshMs();
+  const { can } = usePermissions();
   // Latest captures open in the same viewer the Monitoring pages use.
   const [captureIndex, setCaptureIndex] = useState<number | null>(null);
   const { data: stats, isLoading: lStats } = useQuery({
@@ -140,6 +172,22 @@ export function InferenceAnalyticsView({ from, to }: { from?: string; to?: strin
   const { data: recent } = useQuery({
     queryKey: ["inference", "recent"],
     queryFn: async () => (await api.get("/inference/timeline", { params: { pageSize: 12 } })).data,
+    refetchInterval,
+  });
+  // Camera fleet state for the Cameras Online tile. This is the same endpoint
+  // the Cameras Online page reads, so the two can never report different
+  // counts - the spec asks for that consistency explicitly.
+  // /api/streams is guarded by the cameras_online grant, so a user without it
+  // gets a 403. Ask only when the grant is held: otherwise the query retries a
+  // request that can never succeed, and the tile would print a confident "0 / 0"
+  // for a fleet it was simply not allowed to see.
+  const canSeeCameras = can("cameras_online");
+  const { data: streams, isError: streamsError } = useQuery({
+    queryKey: ["streams", "fleet"],
+    queryFn: async () => (await api.get("/streams")).data as {
+      streams: { id: string; name: string; online: boolean }[];
+    },
+    enabled: canSeeCameras,
     refetchInterval,
   });
   const { data: facets } = useQuery({
@@ -193,9 +241,26 @@ export function InferenceAnalyticsView({ from, to }: { from?: string; to?: strin
     const map = new Map((stats?.byHour || []).map((r) => [Number(r.hour), Number(r.n)]));
     return Array.from({ length: 24 }, (_, h) => ({ hour: h, n: map.get(h) || 0 }));
   }, [stats]);
+  const hourlyTotal = useMemo(() => hourly.reduce((a, r) => a + r.n, 0), [hourly]);
 
+  // Headings name the period actually queried rather than a fixed "last 14
+  // days", which stayed put while the masthead range control moved underneath
+  // it and made every chart look like it covered a fortnight.
+  const rangeLabel = useMemo(() => {
+    if (!from || !to) return "last 14 days";
+    const fmt = (iso: string) =>
+      new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", {
+        timeZone: "UTC", day: "2-digit", month: "short",
+      });
+    return from === to ? fmt(from) : `${fmt(from)} – ${fmt(to)}`;
+  }, [from, to]);
+
+  // Rows for services the dashboard no longer reports are dropped rather than
+  // rendered with a blank chip and an uncoloured bar.
   const cameras = useMemo(
-    () => (stats?.byCamera || []).slice().sort((a, b) => Number(b.n) - Number(a.n)),
+    () => (stats?.byCamera || [])
+      .filter((r) => SERVICE_LABEL[r.service])
+      .sort((a, b) => Number(b.n) - Number(a.n)),
     [stats]
   );
   const upperColours = useMemo(
@@ -212,29 +277,50 @@ export function InferenceAnalyticsView({ from, to }: { from?: string; to?: strin
   }
 
   const c = summary?.counts || {};
-  const totalEvents = SERVICES.reduce((a, s) => a + Number(c[s] || 0), 0);
+
+  // Every module except walk-ins. Walk-ins are footfall, not something to act
+  // on, so folding them in would inflate the alert headline.
+  const activeAlerts = ALERT_SERVICES.reduce((a, s) => a + Number(c[s] || 0), 0);
+
+  const online = (streams?.streams || []).filter((s) => s.online).length;
+  const totalCams = (streams?.streams || []).length;
+  // A dash for "not permitted", "failed" and "none reported" alike - never a
+  // zero the page did not actually establish.
+  const camerasLabel = !canSeeCameras || streamsError || !totalCams ? "—" : `${online} / ${totalCams}`;
 
   return (
     <Box>
-      {/* KPI row - headline numbers are tiles, not charts */}
+      {/* KPI row - three operational headlines, not one tile per module.
+          "Events captured" and "Media stored" are gone: the first restated the
+          sum of the others, and the second reported S3 storage, which is not an
+          operational figure. The per-module detail lives in the charts below. */}
       <Grid container spacing={1.5} sx={{ mb: 2 }}>
-        <Grid size={{ xs: 6, sm: 4, md: 2 }}>
-          <StatTile label="Events captured" value={totalEvents} hint="all services" />
+        <Grid size={{ xs: 12, sm: 4, md: 4 }}>
+          <StatTile
+            label="Walk-ins"
+            value={Number(c.walkins || 0)}
+            accent={MODULE_BY_KEY.walkins.colour}
+            hint={`${Number(last24.get("walkins")?.n || 0)} in last 24h`}
+            onClick={() => navigate(MODULE_BY_KEY.walkins.route)}
+          />
         </Grid>
-        {SERVICES.map((s) => (
-          <Grid key={s} size={{ xs: 6, sm: 4, md: 2 }}>
-            <StatTile
-              label={SERVICE_LABEL[s]}
-              value={Number(c[s] || 0)}
-              accent={SERVICE_COLOUR[s]}
-              hint={`${Number(last24.get(s)?.n || 0)} in last 24h`}
-              // Each KPI drills into its own Monitoring module, per the brief.
-              onClick={() => navigate(MODULE_BY_KEY[s as InferenceModuleKey].route)}
-            />
-          </Grid>
-        ))}
-        <Grid size={{ xs: 6, sm: 4, md: 2 }}>
-          <StatTile label="Media stored" value={fmtBytes(c.bytes)} hint={`${c.assets || 0} objects`} />
+        <Grid size={{ xs: 12, sm: 4, md: 4 }}>
+          <StatTile
+            label="Active Alerts"
+            value={activeAlerts}
+            accent={MODULE_BY_KEY.intrusion.colour}
+            hint="across alert modules"
+            onClick={() => navigate("/crowds-report")}
+          />
+        </Grid>
+        <Grid size={{ xs: 12, sm: 4, md: 4 }}>
+          <StatTile
+            label="Cameras Online"
+            value={camerasLabel}
+            accent={MODULE_BY_KEY.loitering.colour}
+            hint="reporting a signal now"
+            onClick={() => navigate("/live-view")}
+          />
         </Grid>
       </Grid>
 
@@ -242,28 +328,36 @@ export function InferenceAnalyticsView({ from, to }: { from?: string; to?: strin
           stack where hues would compete, and each chart names its own series so
           no legend box is needed. */}
       <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
-        Daily activity by service — last 14 days
+        
       </Typography>
       <Grid container spacing={1.5} sx={{ mb: 2 }}>
         {perService.map((s) => (
-          <Grid key={s.service} size={{ xs: 12, sm: 6, md: 3 }}>
-            <ChartCard title={SERVICE_LABEL[s.service]} subtitle={`${s.total} events`} height={140}>
-              <ResponsiveContainer width="100%" height="100%">
-                {/* Daily counts are discrete per-day events, so bars are the
-                    honest form. An interpolated area implied continuous change
-                    between two sampled days. */}
-                <BarChart data={s.points} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
-                  <CartesianGrid stroke={GRID} vertical={false} />
-                  <XAxis dataKey="label" tick={{ fontSize: 9, fill: INK_MUTED }}
-                         axisLine={false} tickLine={false} interval="preserveStartEnd" minTickGap={10} />
-                  <YAxis allowDecimals={false} width={30} tick={{ fontSize: 10, fill: INK_MUTED }}
-                         axisLine={false} tickLine={false} tickMargin={4} />
-                  <RTooltip cursor={{ fill: "rgba(0,0,0,.04)" }}
-                            formatter={(v) => [Number(v ?? 0), SERVICE_LABEL[s.service]] as [number, string]}
-                            contentStyle={{ fontSize: 12, borderRadius: 8 }} />
-                  <Bar dataKey="n" fill={SERVICE_COLOUR[s.service]} radius={[3, 3, 0, 0]} maxBarSize={22} />
-                </BarChart>
-              </ResponsiveContainer>
+          <Grid key={s.service} size={{ xs: 12, sm: 6, md: 4 }}>
+            <ChartCard
+              title={SERVICE_LABEL[s.service]}
+              subtitle={s.total === 1 ? "1 event" : `${s.total} events`}
+              height={140}
+            >
+              {s.total === 0 ? (
+                <NoData />
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  {/* Daily counts are discrete per-day events, so bars are the
+                      honest form. An interpolated area implied continuous change
+                      between two sampled days. */}
+                  <BarChart data={s.points} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                    <CartesianGrid stroke={GRID} vertical={false} />
+                    <XAxis dataKey="label" tick={{ fontSize: 9, fill: INK_MUTED }}
+                           axisLine={false} tickLine={false} interval="preserveStartEnd" minTickGap={10} />
+                    <YAxis allowDecimals={false} width={30} tick={{ fontSize: 10, fill: INK_MUTED }}
+                           axisLine={false} tickLine={false} tickMargin={4} />
+                    <RTooltip cursor={{ fill: "rgba(0,0,0,.04)" }}
+                              formatter={(v) => [Number(v ?? 0), SERVICE_LABEL[s.service]] as [number, string]}
+                              contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+                    <Bar dataKey="n" fill={SERVICE_COLOUR[s.service]} radius={[3, 3, 0, 0]} maxBarSize={22} />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
             </ChartCard>
           </Grid>
         ))}
@@ -273,6 +367,9 @@ export function InferenceAnalyticsView({ from, to }: { from?: string; to?: strin
         {/* Magnitude over an ordered scale -> single-hue sequential bars */}
         <Grid size={{ xs: 12, md: 7 }}>
           <ChartCard title="When events happen" subtitle="All services by hour of day (site time, IST)" height={210}>
+            {hourlyTotal === 0 ? (
+              <NoData label="No events recorded across any module in this period" />
+            ) : (
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={hourly} margin={{ top: 4, right: 12, left: 0, bottom: 0 }}>
                 <CartesianGrid stroke={GRID} vertical={false} />
@@ -290,6 +387,7 @@ export function InferenceAnalyticsView({ from, to }: { from?: string; to?: strin
                 <Bar dataKey="n" fill={SEQ} radius={[4, 4, 0, 0]} maxBarSize={18} />
               </BarChart>
             </ResponsiveContainer>
+            )}
           </ChartCard>
         </Grid>
 

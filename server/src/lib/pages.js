@@ -46,6 +46,20 @@ const PAGES = [
     api: ["/inference/kitchen-unattended", "/inference/kpis/kitchen_unattended", "/inference/analytics/kitchen_unattended", "/inference/export/kitchen_unattended"],
   },
   {
+    // One prefix covers the sub-streams too (/chef-absence/intrusions,
+    // /detections, /kpis, /analytics) because pageForApiPath matches on
+    // "<prefix>/". These rows carry face crops and face_quality, so this grant
+    // is what gates biometric material.
+    key: "monitoring_chef_absence", label: "Chef Absence", group: "Monitoring",
+    route: "/monitoring/chef-absence",
+    api: [
+      "/inference/chef-absence",
+      "/inference/kpis/chef_absence",
+      "/inference/analytics/chef_absence",
+      "/inference/export/chef_absence",
+    ],
+  },
+  {
     key: "active_alerts", label: "Active Alerts", group: "Operations",
     route: "/crowds-report",
     api: ["/dashboard/crowds-range-stats", "/dashboard/crowds-report-events"],

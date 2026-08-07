@@ -16,7 +16,7 @@ import { contentCardSx, pageLayoutSx } from "./uiSurfaces";
 export type PageKey =
   | "dashboard" | "daily_briefing"
   | "monitoring_walkins" | "monitoring_loitering" | "monitoring_intrusion"
-  | "monitoring_after_hours" | "monitoring_kitchen"
+  | "monitoring_after_hours" | "monitoring_kitchen" | "monitoring_chef_absence"
   | "active_alerts" | "cameras_online" | "known_faces"
   | "inference_viewer" | "settings" | "access_control";
 

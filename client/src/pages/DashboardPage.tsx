@@ -1,13 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { Box, Chip, Stack, Typography } from "@mui/material";
-import { useQuery } from "@tanstack/react-query";
-import CircleIcon from "@mui/icons-material/Circle";
+import { Box } from "@mui/material";
 import { InferenceAnalyticsView } from "../components/dashboard/InferenceAnalyticsView";
 import { MastheadDashboardToolbar } from "../components/MastheadDashboardToolbar";
 import { useShellHeader } from "../context/ShellHeaderContext";
 import { pageLayoutSx } from "../lib/uiSurfaces";
-import { api } from "../lib/api";
-import { useAutoRefreshMs } from "../lib/useAppSettings";
 import {
   type DatePreset, datedRangeFromPreset, defaultLast7Range, normalizeCustomRange,
 } from "../lib/dashboardRange";
@@ -21,32 +17,14 @@ import {
 // writes to those at this site, so every tile read zero. That component is left
 // in the tree, unreferenced, in case the vehicle module is ever commissioned.
 
-function IngestStatus() {
-  const { data } = useQuery({
-    queryKey: ["inference", "health"],
-    queryFn: async () => (await api.get("/inference/health")).data,
-    refetchInterval: 60_000,
-  });
-  const last = data?.ingest?.last_run_at ? new Date(data.ingest.last_run_at) : null;
-  const stale = last ? Date.now() - last.getTime() > 20 * 60 * 1000 : true;
-  const ok = Boolean(data?.s3?.reachable) && !stale;
-  return (
-    <Stack direction="row" spacing={0.75} sx={{ alignItems: "center" }}>
-      <CircleIcon sx={{ fontSize: 10, color: ok ? "success.main" : "warning.main" }} />
-      <Typography variant="caption" color="text.secondary">
-        {ok ? "Ingest healthy" : "Ingest stale"}
-        {last
-          ? ` · last sync ${last.toLocaleTimeString("en-GB", {
-              timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", hour12: false,
-            })}`
-          : " · never run"}
-      </Typography>
-    </Stack>
-  );
-}
+// The page opens directly on the KPI row. The in-page "Operations Analytics"
+// heading, the intro paragraph, the ingest-status line and the auto-refresh
+// chip were all removed: the shell header already names and describes this
+// section, so the heading was a second, conflicting title block, and the other
+// two restated a Settings value and a pipeline detail rather than anything an
+// operator acts on.
 
 export function DashboardPage() {
-  const refreshSecs = Math.round(useAutoRefreshMs() / 1000);
   const { setRightSlot } = useShellHeader();
 
   // Date range lives here and drives every query below, restoring the masthead
@@ -85,22 +63,6 @@ export function DashboardPage() {
 
   return (
     <Box sx={pageLayoutSx}>
-      <Stack
-        direction="row"
-        spacing={1.5}
-        sx={{ alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 1, mb: 0.5 }}
-      >
-        <Typography variant="h5" sx={{ fontWeight: 800 }}>Operations Analytics</Typography>
-        <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
-          <IngestStatus />
-          <Chip size="small" variant="outlined" label={`Auto-refresh ${refreshSecs}s`} sx={{ height: 22, fontSize: 11 }} />
-        </Stack>
-      </Stack>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Everything the cameras have detected — walk-ins, loitering, intrusion and after-hours
-        presence — with activity trends, timing, camera coverage and the latest evidence.
-      </Typography>
-
       <InferenceAnalyticsView from={from} to={to} />
     </Box>
   );

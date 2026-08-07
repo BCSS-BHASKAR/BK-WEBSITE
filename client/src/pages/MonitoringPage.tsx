@@ -18,7 +18,7 @@ import { getAccessToken } from "../auth/tokenStore";
 import { useAutoRefreshMs } from "../lib/useAppSettings";
 import { RequirePage, type PageKey } from "../lib/permissions";
 
-const PAGE_SIZE = 25;
+const PAGE_SIZE = 20;
 
 /**
  * One page template, five modules.

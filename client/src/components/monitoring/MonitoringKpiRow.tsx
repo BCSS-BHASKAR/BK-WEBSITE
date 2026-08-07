@@ -14,17 +14,6 @@ export type ModuleKpis = {
   avgPerHour: number | null;
 };
 
-const SITE_TZ = "Asia/Kolkata";
-
-function fmtWhen(ts: string | null) {
-  if (!ts) return "—";
-  const d = new Date(ts);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleString("en-GB", {
-    timeZone: SITE_TZ, day: "2-digit", month: "short",
-    hour: "2-digit", minute: "2-digit", hour12: false,
-  });
-}
 function fmtDur(s: number | null) {
   if (s == null) return "—";
   const m = Math.floor(s / 60);
@@ -39,11 +28,14 @@ type Tile = { label: string; value: string | number; hint?: string; onClick?: ()
 /**
  * KPI row for a Monitoring page.
  *
- * Tiles are chosen per module from its declared capabilities: "Longest / Average
- * duration" only where a duration exists, "Average confidence" only for
- * walk-ins. Every figure comes from GET /inference/kpis/:module, which applies
- * the same false-positive suppression as the table below - so a thumbs-down
- * moves the tile and the table together.
+ * Every module shows exactly four tiles, so the row is one clean band of the
+ * same height and rhythm on all five pages. The middle pair is chosen from the
+ * module's declared capabilities: "Longest / Average duration" where a duration
+ * exists, "Peak hour / Average per hour" where it does not.
+ *
+ * Every figure comes from GET /inference/kpis/:module, which applies the same
+ * false-positive suppression as the table below - so a thumbs-down moves the
+ * tile and the table together.
  */
 export function MonitoringKpiRow({
   module, kpis, loading, onDrill,
@@ -68,16 +60,17 @@ export function MonitoringKpiRow({
           { label: "Peak hour", value: fmtHour(k?.peakHour ?? null), hint: k ? `${k.peakHourCount} events` : undefined },
           { label: "Average per hour", value: k?.avgPerHour ?? "—" },
         ]),
-    ...(caps.confidence
-      ? [{ label: "Avg confidence", value: k?.avgConfidence != null ? `${Math.round(k.avgConfidence * 100)}%` : "—" }]
-      : []),
-    { label: "Latest detection", value: fmtWhen(k?.latest ?? null) },
+    // "Avg confidence" and "Latest detection" are gone. Confidence is a model
+    // diagnostic rather than an operational figure, and the timestamp was a
+    // long string sitting in a row of short numbers, which pushed the walk-ins
+    // tiles out of step with every other monitoring page. Recency still reads
+    // off the first row of the table below.
   ];
 
   return (
     <Grid container spacing={1.5}>
       {tiles.map((t) => (
-        <Grid key={t.label} size={{ xs: 6, sm: 4, md: 12 / Math.min(6, tiles.length) }}>
+        <Grid key={t.label} size={{ xs: 6, sm: 6, md: 3 }}>
           <Paper
             onClick={t.onClick}
             sx={{

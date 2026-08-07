@@ -54,7 +54,7 @@ const fieldSx = {
     borderRadius: 1.5,
     "& fieldset": { borderColor: "rgba(148, 163, 184, 0.45)" },
     "&:hover fieldset": { borderColor: "#94A3B8" },
-    "&.Mui-focused fieldset": { borderColor: "#B8860B", borderWidth: 2 },
+    "&.Mui-focused fieldset": { borderColor: "#C08529", borderWidth: 2 },
   },
 };
 
@@ -131,7 +131,7 @@ export function LoginSecureSignIn() {
               display: "grid",
               placeItems: "center",
               // Venue gold, not the old product's police blue.
-              background: "linear-gradient(145deg, #D9AE45 0%, #B8860B 100%)",
+              background: "linear-gradient(145deg, #D9AE45 0%, #C08529 100%)",
               boxShadow: "0 0 32px rgba(217, 174, 69, 0.45), 0 10px 28px rgba(184, 134, 11, 0.35)",
               color: "#fff",
               mb: 1.5,
@@ -144,7 +144,7 @@ export function LoginSecureSignIn() {
                 position: "absolute",
                 bottom: 10,
                 right: 10,
-                bgcolor: "#946A08",
+                bgcolor: "#8F6119",
                 borderRadius: "50%",
                 p: 0.25,
               }}
@@ -296,11 +296,11 @@ export function LoginSecureSignIn() {
               textTransform: "uppercase",
               borderRadius: 2,
               bgcolor: "#0F2744",
-              backgroundImage: "linear-gradient(180deg, #5E1A2B 0%, #3B0E1B 100%)",
+              backgroundImage: "linear-gradient(180deg, #4A6630 0%, #2C3D1B 100%)",
               boxShadow: "0 10px 28px rgba(15, 39, 68, 0.5)",
               "&:hover": {
                 bgcolor: "#0A1F38",
-                backgroundImage: "linear-gradient(180deg, #4A1220 0%, #2B0810 100%)",
+                backgroundImage: "linear-gradient(180deg, #3E5626 0%, #243117 100%)",
               },
             }}
           >

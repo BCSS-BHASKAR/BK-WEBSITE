@@ -47,6 +47,7 @@ function basename(p) {
 // uploads/kitchen_unattended/..., ingest picks it up with no code change.
 const KNOWN_SERVICES = new Set([
   "walkins", "loitering", "intrusion", "after_hours", "kitchen_unattended",
+  "chef_absence",
 ]);
 
 function parseKey(key) {
@@ -254,6 +255,112 @@ function parseWalkinRecord(line) {
   };
 }
 
+/**
+ * chef_absence unattended clip: <YYYY-MM-DD>_<HH-MM-SS>_<camera>.mp4
+ *   e.g. "2026-08-06_16-02-57_Side View.mp4"
+ *
+ * The camera id comes LAST and contains spaces, so this splits from the left:
+ * the first two segments are always date and time, and everything after them
+ * is the camera name, preserved verbatim (a loitering filename is the mirror
+ * image of this, which is why they need separate parsers).
+ *
+ * The timestamp is the moment the kitchen was first seen empty. There is no
+ * end timestamp anywhere in the artefact set - see the note in
+ * sql/chef_absence.sql about why clip length is not absence duration.
+ */
+function parseChefAbsenceClip(filename) {
+  const stem = basename(filename).replace(VIDEO_EXT, "");
+  const m = /^(\d{4}-\d{2}-\d{2})_(\d{2}-\d{2}-\d{2})_(.+)$/.exec(stem);
+  if (!m) return null;
+
+  const startedAt = localToDate(`${m[1]} ${m[2]}`, "YYYY-MM-DD HH-mm-ss");
+  if (!startedAt) return null;
+
+  // Trailing space is meaningful on these camera ids elsewhere in the system,
+  // so it is kept rather than trimmed.
+  return { cameraKey: m[3], startedAt };
+}
+
+/**
+ * chef_absence intrusion snapshot: <YYYY-MM-DD>-<HH-MM-SS>_<seq>.png
+ *   e.g. "2026-08-06-21-28-00_1.png"
+ *
+ * Every component is dash-separated, so the date and time cannot be told apart
+ * positionally - the six groups are matched explicitly. seq restarts each day
+ * and runs to four digits; it is kept for ordering within the same second.
+ * No camera id is present in the filename.
+ */
+function parseKitchenIntrusion(filename) {
+  const stem = basename(filename).replace(IMAGE_EXT, "");
+  const m = /^(\d{4}-\d{2}-\d{2})-(\d{2})-(\d{2})-(\d{2})_(\d{1,4})$/.exec(stem);
+  if (!m) return null;
+
+  const occurredAt = localToDate(`${m[1]} ${m[2]}${m[3]}${m[4]}`, "YYYY-MM-DD HHmmss");
+  if (!occurredAt) return null;
+
+  return { occurredAt, dailySeq: Number(m[5]) };
+}
+
+/**
+ * chef_absence detections.jsonl line.
+ *
+ * Same detector family as walkins, so most fields match - but this stream adds
+ * the three the kitchen actually cares about:
+ *   status_chef  'chef' | 'non-chef' | 'housekeeping'
+ *   cap_garment  null when no headwear was detected (the hygiene signal)
+ *   frame_path   the full frame, not just the crop
+ *
+ * timestamp carries an explicit +00:00 and is already absolute. crop_path uses
+ * Windows backslashes in every record observed, so it is normalised. The
+ * *_hist arrays (512 floats each) are re-identification vectors and are
+ * dropped - no UI can use them.
+ */
+function parseChefRecord(line) {
+  let rec;
+  try {
+    rec = JSON.parse(line);
+  } catch {
+    return null;
+  }
+  if (!rec || rec.track_id == null || !rec.timestamp) return null;
+
+  const detectedAt = dayjs(String(rec.timestamp));
+  if (!detectedAt.isValid()) return null;
+
+  const colours = [];
+  for (const region of ["upper", "lower", "cap"]) {
+    for (const c of rec[`${region}_colors`] || []) {
+      if (!c || !c.name) continue;
+      colours.push({
+        region,
+        name: String(c.name),
+        percentage: c.percentage == null ? null : Number(c.percentage),
+        rgb: Array.isArray(c.rgb) ? c.rgb.map(Number) : null,
+      });
+    }
+  }
+
+  return {
+    cameraKey: String(rec.camera_id || ""),
+    trackId: Number(rec.track_id),
+    rawTrackId: rec.raw_track_id == null ? null : Number(rec.raw_track_id),
+    detectedAt: detectedAt.toDate(),
+    statusChef: rec.status_chef || null,
+    bbox: Array.isArray(rec.bbox) ? rec.bbox : null,
+    confidence: rec.confidence == null ? null : Number(rec.confidence),
+    upperGarment: rec.upper_garment || null,
+    lowerGarment: rec.lower_garment || null,
+    capGarment: rec.cap_garment || null,
+    faceQuality: rec.face_quality || null,
+    identityName: rec.identity_name || null,
+    identitySimilarity: rec.identity_similarity == null ? null : Number(rec.identity_similarity),
+    mode: rec.mode || null,
+    cropBasename: rec.crop_path ? basename(rec.crop_path) : null,
+    frameBasename: rec.frame_path ? basename(rec.frame_path) : null,
+    colours,
+  };
+}
+
 module.exports = {
   SITE_TZ,
   KNOWN_SERVICES,
@@ -266,4 +373,7 @@ module.exports = {
   parseWalkinCrop,
   parseIntrusionRecord,
   parseWalkinRecord,
+  parseChefAbsenceClip,
+  parseKitchenIntrusion,
+  parseChefRecord,
 };

@@ -37,7 +37,7 @@ import {
   datedRangeFromPreset,
 } from "../lib/dashboardRange";
 import { downloadDailyBriefingPdf } from "../lib/dailyBriefingPdf";
-import { crowdAlertTypeColor } from "../lib/crowdAlertTypes";
+import { MODULE_BY_KEY, type InferenceModuleKey } from "../lib/inferenceModules";
 import { SITE_BRANDING } from "../i18n/lang";
 import { pnp } from "../lib/pnpTheme";
 
@@ -98,6 +98,32 @@ export type DailyBriefingData = {
       changeDirection?: "up" | "down" | "flat";
       changeLabel?: string;
       sharePct: number;
+      /** False for a type that recorded nothing; the row is still rendered. */
+      hasData?: boolean;
+    }[];
+    /**
+     * One entry per monitoring type the venue runs - walk-ins, the kitchen pair,
+     * loitering, intrusion, after hours - present whether or not it fired.
+     * `sharePct` is null for walk-ins, which are footfall rather than alerts.
+     */
+    moduleBreakdown?: {
+      key: string;
+      label: string;
+      kind: "footfall" | "alert";
+      count: number;
+      priorCount?: number;
+      hasData: boolean;
+      sharePct: number | null;
+      eventNoun: string;
+      summary: string;
+      peakLabel?: string | null;
+      peakCount?: number;
+      topCamera?: string | null;
+      topCameraCount?: number;
+      cameras?: number;
+      changePct?: number;
+      changeDirection?: "up" | "down" | "flat";
+      changeLabel?: string;
     }[];
     recommendations: {
       priority: number;
@@ -173,8 +199,23 @@ function MetaItem({ icon, label, value }: { icon: ReactNode; label: string; valu
   );
 }
 
+/**
+ * Bar colour for an alert type.
+ *
+ * Reads the live module registry, not the legacy crowds taxonomy. The server
+ * now emits module keys (intrusion, loitering, after_hours, kitchen_unattended,
+ * chef_absence); of the five legacy codes only "intrusion" ever matched, and
+ * "kitchen_unattended" does NOT match the legacy "unattended_kitchen" - the
+ * words are reversed. So four of five bars fell through to the same muted grey,
+ * and the chart's colour carried no information. MODULE_BY_KEY also keeps this
+ * page agreeing with the Dashboard on what colour each type is.
+ */
 function alertBarColor(code: string) {
-  return crowdAlertTypeColor(code).color;
+  // "kitchen" is the merged Kitchen Unattended / Chef Absence section, which has
+  // no module key of its own - it wears chef_absence's hue, the detector that
+  // actually records at this site.
+  const key = code === "kitchen" ? "chef_absence" : code;
+  return MODULE_BY_KEY[key as InferenceModuleKey]?.colour ?? pnp.textMuted;
 }
 
 function SummaryStat({ label, value }: { label: string; value: string }) {
@@ -336,7 +377,23 @@ export function DailyBriefingPage() {
                   fontWeight: 900,
                 }}
               />
-              <Chip size="small" label="High Confidence" sx={{ ...badgeSx("info"), fontWeight: 800 }} />
+              {/* Was hardcoded to "High Confidence" and sat directly beside the
+                  numeric score, so a 55% report still claimed high confidence.
+                  The band now follows the number it is printed next to. */}
+              <Chip
+                size="small"
+                label={
+                  report.aiConfidenceScore >= 85 ? "High Confidence"
+                    : report.aiConfidenceScore >= 70 ? "Moderate Confidence"
+                    : "Low Confidence"
+                }
+                sx={{
+                  ...(report.aiConfidenceScore >= 85 ? badgeSx("info")
+                    : report.aiConfidenceScore >= 70 ? badgeSx("warning")
+                    : badgeSx("danger")),
+                  fontWeight: 800,
+                }}
+              />
             </Box>
           ) : null}
         </Box>
@@ -503,7 +560,7 @@ export function DailyBriefingPage() {
                     ) : null}
                   </Box>
                 </Box>
-                <Box sx={{ height: 10, borderRadius: 1, bgcolor: "rgba(74,18,32,0.06)", overflow: "hidden" }}>
+                <Box sx={{ height: 10, borderRadius: 1, bgcolor: "rgba(62,86,38,0.08)", overflow: "hidden" }}>
                   <Box
                     sx={{
                       height: "100%",
@@ -513,6 +570,14 @@ export function DailyBriefingPage() {
                     }}
                   />
                 </Box>
+                {/* A type that recorded nothing keeps its row and says so, rather
+                    than being dropped and leaving the reader to guess whether it
+                    was quiet or not monitored at all. */}
+                {v.count === 0 ? (
+                  <Typography sx={{ fontSize: "0.6875rem", fontWeight: 600, color: pnp.textMuted, mt: 0.25 }}>
+                    No events recorded for this period
+                  </Typography>
+                ) : null}
               </Box>
             ))}
             {!(report?.alertBreakdown || []).length ? (
@@ -528,7 +593,54 @@ export function DailyBriefingPage() {
         </Paper>
       </Box>
 
-      {}
+      {/* Every monitoring type the venue runs, quiet ones included. The section
+          above ranks the alert modules against each other; this one answers the
+          different question of whether each module reported at all. */}
+      <Typography sx={{ fontWeight: 900, fontSize: "1rem", color: pnp.text, mb: 1.25 }}>
+        Monitoring Coverage
+      </Typography>
+      <Box
+        sx={{
+          display: "grid",
+          gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))", lg: "repeat(5, minmax(0, 1fr))" },
+          gap: 1.25,
+          mb: 2.5,
+        }}
+      >
+        {(report?.moduleBreakdown || []).map((m) => (
+          <Paper key={m.key} sx={{ ...reportPaperSx, p: 1.75, display: "flex", flexDirection: "column", gap: 0.5 }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, minWidth: 0 }}>
+              <Box sx={{ width: 8, height: 8, borderRadius: "50%", flexShrink: 0, bgcolor: alertBarColor(m.key) }} />
+              <Typography sx={{ fontSize: "0.75rem", fontWeight: 800, color: pnp.textSecondary }} noWrap>
+                {m.label}
+              </Typography>
+            </Box>
+            <Typography sx={{ fontWeight: 900, fontSize: "1.5rem", lineHeight: 1.1, color: m.hasData ? pnp.text : pnp.textMuted }}>
+              {m.count.toLocaleString()}
+            </Typography>
+            <Typography sx={{ fontSize: "0.6875rem", fontWeight: 600, color: pnp.textSecondary }}>
+              {m.eventNoun}{m.sharePct != null && m.hasData ? ` · ${m.sharePct}% of alerts` : ""}
+            </Typography>
+            {m.hasData && m.changeLabel ? (
+              <Box sx={{ display: "flex", alignItems: "center", gap: 0.35 }}>
+                <TrendGlyph trend={m.changeDirection === "flat" ? "stable" : m.changeDirection || "stable"} />
+                <Typography sx={{ fontSize: "0.6875rem", fontWeight: 800, color: changeLabelColor(m.changeDirection) }}>
+                  {m.changeLabel}
+                </Typography>
+              </Box>
+            ) : null}
+            <Typography sx={{ fontSize: "0.6875rem", fontWeight: 500, color: pnp.textMuted, mt: "auto", pt: 0.5 }}>
+              {m.hasData && m.peakLabel ? `Peak ${m.peakLabel}` : m.summary}
+            </Typography>
+          </Paper>
+        ))}
+        {!(report?.moduleBreakdown || []).length ? (
+          <Typography sx={{ fontSize: "0.8125rem", fontWeight: 600, color: pnp.textSecondary, py: 2 }}>
+            Module coverage is unavailable for this period.
+          </Typography>
+        ) : null}
+      </Box>
+
       <Typography sx={{ fontWeight: 900, fontSize: "1rem", color: pnp.text, mb: 1.25 }}>Operational Recommendations</Typography>
       <Box
         sx={{
@@ -559,7 +671,14 @@ export function DailyBriefingPage() {
       {}
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "1fr 1fr" }, gap: 2, mb: 2, alignItems: "start" }}>
         <Paper sx={{ ...reportPaperSx, p: 2 }}>
-          <Typography sx={{ fontWeight: 900, fontSize: "0.9375rem", mb: 1.5 }}>Daily Briefing Archive</Typography>
+          <Typography sx={{ fontWeight: 900, fontSize: "0.9375rem" }}>Earlier Periods</Typography>
+          {/* These are not stored reports. Nothing archives a briefing, so the
+              rows are preceding date ranges that get generated on demand when
+              you download one. Naming it "Archive" implied a history that does
+              not exist. */}
+          <Typography sx={{ fontSize: "0.75rem", color: pnp.textMuted, mb: 1.5 }}>
+            Generated on demand from the same live data — not stored copies.
+          </Typography>
           <Table size="small">
             <TableHead>
               <TableRow>

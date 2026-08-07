@@ -16,7 +16,8 @@ export type InferenceModuleKey =
   | "loitering"
   | "intrusion"
   | "after_hours"
-  | "kitchen_unattended";
+  | "kitchen_unattended"
+  | "chef_absence";
 
 export type ModuleCapabilities = {
   /** Detections carry a numeric confidence (only walk-ins do today). */
@@ -96,6 +97,24 @@ export const INFERENCE_MODULES: InferenceModule[] = [
     colour: "#4a3aa7",
     endpoint: "kitchen-unattended",
     capabilities: { confidence: false, duration: true, video: false, identity: false, appearance: false },
+  },
+  {
+    key: "chef_absence",
+    label: "Chef Absence",
+    blurb: "Cooking-station coverage, kitchen entries and uniform compliance.",
+    eventNoun: "Absence incident",
+    route: "/monitoring/chef-absence",
+    // Sixth categorical slot. Checked with the palette validator against the
+    // five hues above: passes lightness, chroma, CVD separation and the
+    // normal-vision floor (its worst adjacent pair is 21.7 normal / 9.1 protan).
+    colour: "#c2408c",
+    endpoint: "chef-absence",
+    // duration is FALSE on purpose. Clips carry a length, but it measures the
+    // recording, not how long the kitchen was unattended - 150 of 151 clips are
+    // shorter than the 60 s the detector is documented to require. Declaring it
+    // here would put a "Longest / Average duration" tile on the page built on a
+    // number that does not mean what it says.
+    capabilities: { confidence: true, duration: false, video: true, identity: false, appearance: true },
   },
 ];
 

@@ -80,6 +80,24 @@ async function getObjectHead(key, bytes = 3 * 1024 * 1024) {
 }
 
 /**
+ * Fetch only the last `bytes` of an object.
+ *
+ * The chef_absence clips are written without faststart, so the moov atom - the
+ * only place frame count and duration live - sits at the END of the file. A
+ * head fetch can decode a poster frame but can never report length. This keeps
+ * that lookup to one small range request instead of pulling a clip that can be
+ * 325 MB.
+ */
+async function getObjectTail(key, bytes = 256 * 1024) {
+  const res = await s3().send(
+    new GetObjectCommand({ Bucket: BUCKET, Key: key, Range: `bytes=-${Math.max(1, bytes)}` })
+  );
+  const chunks = [];
+  for await (const chunk of res.Body) chunks.push(chunk);
+  return Buffer.concat(chunks);
+}
+
+/**
  * Mint a short-TTL presigned GET URL. The browser fetches straight from S3,
  * which keeps 30-40 MB loitering clips off the EC2 box entirely and gives
  * native HTTP range requests for video seeking.
@@ -104,4 +122,7 @@ async function probe() {
   return { bucket: BUCKET, region: REGION, prefix: PREFIX, reachable: true, keyCount: res.KeyCount || 0 };
 }
 
-module.exports = { BUCKET, REGION, PREFIX, listObjects, getObjectText, getObjectHead, presignGet, probe };
+module.exports = {
+  BUCKET, REGION, PREFIX,
+  listObjects, getObjectText, getObjectHead, getObjectTail, presignGet, probe,
+};

@@ -32,6 +32,15 @@ const pgPool = new Pool({
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 10000,
   ssl: sslConfig(),
+  // Pin the session clock instead of inheriting postgresql.conf.
+  //
+  // Several date filters build their bounds with AT TIME ZONE, and one overload
+  // of that operator returns a value that depends on the session TimeZone. Those
+  // call sites are now written to be session-independent, but leaving the
+  // session unpinned means the whole app's date handling silently changes if
+  // the server's timezone setting is ever edited. Stating it here makes the
+  // assumption explicit and reproducible across environments.
+  options: "-c TimeZone=UTC",
 });
 
 pgPool.on("error", (err) => {

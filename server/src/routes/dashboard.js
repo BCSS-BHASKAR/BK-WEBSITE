@@ -1833,7 +1833,8 @@ router.get("/daily-briefing", async (req, res) => {
   if (!r) return res.status(400).json({ error: "bad_request", message: "invalid from/to (YYYY-MM-DD)" });
   const { from, to } = r;
   try {
-    const briefing = await buildVenueBriefing(pool, from, to);
+    // req.user names the person the report is prepared for.
+    const briefing = await buildVenueBriefing(pool, from, to, req.user || null);
     return res.json(briefing);
   } catch (e) {
     console.error("daily-briefing", e);
@@ -1853,7 +1854,7 @@ router.post("/daily-briefing/email", async (req, res) => {
     return res.status(400).json({ ok: false, message: "No briefing email recipient configured." });
   }
   try {
-    const briefing = await buildVenueBriefing(pool, from, to);
+    const briefing = await buildVenueBriefing(pool, from, to, req.user || null);
     const { sendChallanEmail } = require("../lib/demoMailer");
     const lines = [
       `AI Daily Briefing — ${briefing.meta.reportDateLabel}`,
@@ -1864,23 +1865,41 @@ router.post("/daily-briefing/email", async (req, res) => {
       briefing.report.executiveSummary,
       ``,
       `Key Findings:`,
-      ...briefing.report.keyFindings.map((f) => `• ${f.label}: ${f.value} (${f.detail})`),
+      // Findings expose title/value/detail and recommendations expose
+      // label/title/body. Reading f.label, c.priority and c.detail printed the
+      // literal string "undefined" in every briefing email that has been sent.
+      ...briefing.report.keyFindings.map((f) => `• ${f.title}: ${f.value} (${f.detail})`),
       ``,
       briefing.report.aiNarrative,
       ``,
       `Recommendations:`,
-      ...briefing.report.recommendations.map((c) => `• [${c.priority}] ${c.title} — ${c.detail}`),
+      ...briefing.report.recommendations.map((c) => `• [${c.label}] ${c.title} — ${c.body}`),
       ``,
       `Generated: ${briefing.meta.generatedAt}`,
     ];
-    await sendChallanEmail({
+    // The result was previously discarded, so a failed send and a demo-mode
+    // no-op both reported "Briefing emailed to ...". Report what happened.
+    const sent = await sendChallanEmail({
       to: recipient,
       subject: `AI Daily Briefing — ${from}${from !== to ? ` to ${to}` : ""}`,
       text: lines.join("\n"),
       html: `<pre style="font-family:system-ui,sans-serif;font-size:13px">${lines.join("\n").replace(/</g, "&lt;")}</pre>`,
       meta: { type: "daily_briefing" },
     });
-    return res.json({ ok: true, message: `Briefing emailed to ${recipient}.` });
+    if (!sent || !sent.ok) {
+      return res.status(502).json({
+        ok: false,
+        message: `Could not send the briefing${sent?.error ? `: ${sent.error}` : ""}. Download the PDF instead.`,
+      });
+    }
+    if (sent.mode === "demo") {
+      return res.json({
+        ok: true,
+        mode: "demo",
+        message: "SMTP is not configured, so the briefing was logged rather than sent.",
+      });
+    }
+    return res.json({ ok: true, mode: "smtp", message: `Briefing emailed to ${recipient}.` });
   } catch (e) {
     console.error("daily-briefing/email", e);
     return res.status(503).json({

@@ -41,8 +41,11 @@ function Panel({ title, subtitle, height = 180, children }: {
  *
  * Every panel is SINGLE-SERIES and painted in that module's own hue, so no
  * legend is needed (the panel title names the series) and no two hues ever
- * compete inside one chart. The heatmap is a sequential single-hue grid —
- * more-is-darker — which is the safe default for magnitude.
+ * compete inside one chart.
+ *
+ * There is deliberately no day x hour heatmap. With a few days of history it is
+ * a mostly-empty grid, and the hourly and weekday panels answer the same
+ * question directly. The API still returns `heatmap`; nothing here reads it.
  */
 export function MonitoringAnalytics({
   module, data, loading,
@@ -72,12 +75,6 @@ export function MonitoringAnalytics({
     () => (data?.byCamera || []).slice().sort((a, b) => Number(b.n) - Number(a.n)),
     [data]
   );
-
-  const heat = useMemo(() => {
-    const m = new Map((data?.heatmap || []).map((r) => [`${r.weekday}-${r.hour}`, Number(r.n)]));
-    const max = Math.max(1, ...Array.from(m.values()));
-    return { get: (d: number, h: number) => m.get(`${d}-${h}`) || 0, max };
-  }, [data]);
 
   if (loading) {
     return (
@@ -176,35 +173,6 @@ export function MonitoringAnalytics({
         </Panel>
       </Grid>
 
-      <Grid size={12}>
-        <Panel title="Detection heatmap" subtitle="Day of week x hour of day — darker means busier" height={168}>
-          <Box sx={{ overflowX: "auto" }}>
-            <Box sx={{ display: "grid", gridTemplateColumns: `36px repeat(24, minmax(16px, 1fr))`, gap: "2px", minWidth: 560 }}>
-              <Box />
-              {Array.from({ length: 24 }, (_, h) => (
-                <Typography key={h} variant="caption" sx={{ fontSize: 9, color: INK, textAlign: "center" }}>
-                  {h % 3 === 0 ? String(h).padStart(2, "0") : ""}
-                </Typography>
-              ))}
-              {WEEKDAYS.map((wd, d) => (
-                <Box key={wd} sx={{ display: "contents" }}>
-                  <Typography variant="caption" sx={{ fontSize: 10, color: INK, lineHeight: "18px" }}>{wd}</Typography>
-                  {Array.from({ length: 24 }, (_, h) => {
-                    const n = heat.get(d, h);
-                    // Sequential: one hue, opacity carries magnitude.
-                    const alpha = n === 0 ? 0.05 : 0.18 + 0.82 * (n / heat.max);
-                    return (
-                      <Tooltip key={h} title={`${wd} ${String(h).padStart(2, "0")}:00 — ${n} event${n === 1 ? "" : "s"}`}>
-                        <Box sx={{ height: 18, borderRadius: "3px", bgcolor: hue, opacity: alpha }} />
-                      </Tooltip>
-                    );
-                  })}
-                </Box>
-              ))}
-            </Box>
-          </Box>
-        </Panel>
-      </Grid>
     </Grid>
   );
 }
