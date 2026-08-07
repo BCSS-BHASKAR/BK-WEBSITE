@@ -268,6 +268,10 @@ export function InferenceAnalyticsView({ from, to }: { from?: string; to?: strin
 
   // Every module except walk-ins. Walk-ins are footfall, not something to act
   // on, so folding them in would inflate the alert headline.
+  //
+  // Chef Absence has its own tile AND is counted here. That overlap is
+  // deliberate: the tile answers "how is the kitchen covered", the total answers
+  // "how much needs attention overall", and the hint on each says which it is.
   const activeAlerts = ALERT_SERVICES.reduce((a, s) => a + Number(c[s] || 0), 0);
 
   const online = (streams?.streams || []).filter((s) => s.online).length;
@@ -278,12 +282,12 @@ export function InferenceAnalyticsView({ from, to }: { from?: string; to?: strin
 
   return (
     <Box>
-      {/* KPI row - three operational headlines, not one tile per module.
+      {/* KPI row - four operational headlines, not one tile per module.
           "Events captured" and "Media stored" are gone: the first restated the
           sum of the others, and the second reported S3 storage, which is not an
           operational figure. The per-module detail lives in the charts below. */}
       <Grid container spacing={1.5} sx={{ mb: 2 }}>
-        <Grid size={{ xs: 12, sm: 4, md: 4 }}>
+        <Grid size={{ xs: 6, sm: 6, md: 3 }}>
           <StatTile
             label="Walk-ins"
             value={Number(c.walkins || 0)}
@@ -292,7 +296,16 @@ export function InferenceAnalyticsView({ from, to }: { from?: string; to?: strin
             onClick={() => navigate(MODULE_BY_KEY.walkins.route)}
           />
         </Grid>
-        <Grid size={{ xs: 12, sm: 4, md: 4 }}>
+        <Grid size={{ xs: 6, sm: 6, md: 3 }}>
+          <StatTile
+            label="Chef Absence"
+            value={Number(c.chef_absence || 0)}
+            accent={MODULE_BY_KEY.chef_absence.colour}
+            hint={`${Number(last24.get("chef_absence")?.n || 0)} in last 24h`}
+            onClick={() => navigate(MODULE_BY_KEY.chef_absence.route)}
+          />
+        </Grid>
+        <Grid size={{ xs: 6, sm: 6, md: 3 }}>
           <StatTile
             label="Active Alerts"
             value={activeAlerts}
@@ -301,7 +314,7 @@ export function InferenceAnalyticsView({ from, to }: { from?: string; to?: strin
             onClick={() => navigate("/crowds-report")}
           />
         </Grid>
-        <Grid size={{ xs: 12, sm: 4, md: 4 }}>
+        <Grid size={{ xs: 6, sm: 6, md: 3 }}>
           <StatTile
             label="Cameras Online"
             value={camerasLabel}
@@ -312,10 +325,12 @@ export function InferenceAnalyticsView({ from, to }: { from?: string; to?: strin
         </Grid>
       </Grid>
 
-      {/* Small multiples: one single-series chart per service. Avoids a 4-series
+      {/* Small multiples: one single-series chart per service. Avoids a 5-series
           stack where hues would compete, and each chart names its own series so
-          no legend box is needed - which is also why there is no heading above
-          this row: an empty one only added a blank band of whitespace. */}
+          no legend box is needed. */}
+      <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
+        Daily activity by service
+      </Typography>
       <Grid container spacing={1.5} sx={{ mb: 2 }}>
         {perService.map((s) => (
           <Grid key={s.service} size={{ xs: 12, sm: 6, md: 4 }}>
@@ -349,6 +364,9 @@ export function InferenceAnalyticsView({ from, to }: { from?: string; to?: strin
         ))}
       </Grid>
 
+      <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
+        Activity patterns
+      </Typography>
       <Grid container spacing={1.5} sx={{ mb: 2 }}>
         {/* Magnitude over an ordered scale -> single-hue sequential bars */}
         <Grid size={{ xs: 12, md: 7 }}>
@@ -407,6 +425,9 @@ export function InferenceAnalyticsView({ from, to }: { from?: string; to?: strin
         </Grid>
       </Grid>
 
+      <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
+        Cameras and captures
+      </Typography>
       <Grid container spacing={1.5} sx={{ mb: 2 }}>
         {/* A table, not more colours: 11 cameras across 4 services exceeds any
             sane categorical budget, and exact counts matter more than shape. */}
