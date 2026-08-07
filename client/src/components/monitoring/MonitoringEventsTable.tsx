@@ -7,9 +7,8 @@ import PlayCircleFilledRoundedIcon from "@mui/icons-material/PlayCircleFilledRou
 import ThumbUpAltIcon from "@mui/icons-material/ThumbUpAlt";
 import ThumbDownAltIcon from "@mui/icons-material/ThumbDownAlt";
 import InboxOutlinedIcon from "@mui/icons-material/InboxOutlined";
-import type { ReactNode } from "react";
 import { contentCardSx } from "../../lib/uiSurfaces";
-import { ellipsisSx, tableCellSx, tableHeadSx, thumbSx } from "./monitoringTokens";
+import { tableCellSx, tableHeadSx, thumbSx } from "./monitoringTokens";
 import type { InferenceModule } from "../../lib/inferenceModules";
 
 export type MonitoringRow = {
@@ -77,26 +76,6 @@ function fmtDuration(s?: number | null): string {
 }
 
 /**
- * One column of the events table: its header, its width, the breakpoint below
- * which it drops out, and how it renders a cell.
- *
- * Header and body cells are both generated from this single list, so a column
- * can never appear in one and not the other - which is what used to let the
- * headers drift out of step with the row content on modules whose capability
- * set added a column mid-table.
- */
-type Column = {
-  key: string;
-  label: string;
-  align?: "center";
-  /** Fixed px width. The one column that omits it (Camera) absorbs the slack. */
-  width?: number;
-  /** Dropped below this breakpoint so the table never needs a sideways scroll. */
-  hideBelow?: "sm" | "md";
-  render: (r: MonitoringRow, i: number) => ReactNode;
-};
-
-/**
  * The Monitoring detection-events table.
  *
  * Columns are derived from the module's declared capabilities rather than a
@@ -105,15 +84,9 @@ type Column = {
  * module never shows a column its detector cannot populate. There is no Site
  * column because nothing in the inference data links a detection to a site.
  *
- * Layout is `table-layout: fixed` at a full 100% width. That is what keeps the
- * header rule and the row content on the same vertical lines, holds the column
- * widths steady from page to page regardless of how long the values happen to
- * be, and keeps the table inside its card instead of spilling into a horizontal
- * scrollbar. Values that can run long (camera keys, garment names) ellipsize
- * and keep their tooltip rather than widening the column.
- *
  * Visual style (header casing, cell weight, borders, thumbnail geometry) comes
- * from monitoringTokens.
+ * from monitoringTokens, which holds the values previously duplicated inside
+ * each of the four legacy *EventsListView components.
  */
 export function MonitoringEventsTable({
   module, rows, total, page, pageSize, loading, moduleForRow, cameraLabel, feedbackFor,
@@ -122,157 +95,27 @@ export function MonitoringEventsTable({
   const caps = module.capabilities;
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
 
-  const columns: Column[] = [
-    {
-      key: "capture", label: "Capture", width: 78,
-      render: (r) => {
-        const thumb = r.posterUrl || (!r.isVideo ? r.mediaUrl : undefined);
-        return (
-          <Box sx={{ position: "relative", width: 56, height: 40 }}>
-            {thumb ? (
-              <Box
-                component="img" src={thumb} alt="" loading="lazy" sx={thumbSx}
-                // Poster URLs are offered before the file exists, so a few will
-                // 404 (a clip too large to render one). Hide the element rather
-                // than show a broken-image icon.
-                onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = "hidden"; }}
-              />
-            ) : (
-              <Box sx={{ ...thumbSx, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <Typography variant="caption" color="text.disabled">—</Typography>
-              </Box>
-            )}
-            {r.isVideo && (
-              <PlayCircleFilledRoundedIcon
-                sx={{
-                  position: "absolute", inset: 0, m: "auto", fontSize: 20,
-                  color: "rgba(255,255,255,.95)", filter: "drop-shadow(0 1px 3px rgba(0,0,0,.7))",
-                }}
-              />
-            )}
-          </Box>
-        );
-      },
-    },
-    {
-      key: "event", label: "Event", width: 128, hideBelow: "sm",
-      render: (r) => {
-        // Per-row when the table mixes modules, page-level otherwise.
-        const rm = moduleForRow ? moduleForRow(r) : module;
-        return (
-          <Chip
-            size="small" label={rm.eventNoun}
-            sx={{
-              maxWidth: "100%", height: 22, fontSize: 11, fontWeight: 700,
-              bgcolor: `${rm.colour}1A`, color: rm.colour,
-              border: `1px solid ${rm.colour}44`,
-            }}
-          />
-        );
-      },
-    },
-    {
-      // No width: this is the flexible column that takes whatever is left.
-      key: "camera", label: "Camera",
-      render: (r) => (
-        <Tooltip title={r.camera_key || ""}>
-          <Box component="span" sx={ellipsisSx}>
-            {cameraLabel ? cameraLabel(r.camera_key || "") : (r.camera_key || "—").trim()}
-          </Box>
-        </Tooltip>
-      ),
-    },
-    ...(caps.duration
-      ? [{
-          key: "duration", label: "Duration", width: 100, hideBelow: "md" as const,
-          render: (r: MonitoringRow) => fmtDuration(r.dwell_seconds),
-        }]
-      : []),
-    ...(caps.confidence
-      ? [{
-          key: "confidence", label: "Confidence", width: 108, hideBelow: "md" as const,
-          render: (r: MonitoringRow) =>
-            r.confidence == null ? "—" : `${Math.round(Number(r.confidence) * 100)}%`,
-        }]
-      : []),
-    ...(caps.identity
-      ? [{
-          key: "identity", label: "Identity", width: 108, hideBelow: "md" as const,
-          render: (r: MonitoringRow) => (r.global_id ? `GID ${r.global_id}` : r.tag || "—"),
-        }]
-      : []),
-    ...(caps.appearance
-      ? [{
-          key: "appearance", label: "Appearance", width: 150, hideBelow: "md" as const,
-          render: (r: MonitoringRow) => (
-            <Stack direction="row" spacing={0.5} sx={{ alignItems: "center", minWidth: 0 }}>
-              {(r.colours || []).filter((c) => c.region === "upper").slice(0, 2).map((c, idx) => (
-                <Box key={idx} title={`${c.name} ${c.percentage ?? ""}%`}
-                     sx={{
-                       width: 14, height: 14, borderRadius: "3px", flexShrink: 0,
-                       border: "1px solid rgba(0,0,0,.22)",
-                       bgcolor: c.rgb && c.rgb.length === 3 ? `rgb(${c.rgb.join(",")})` : "#999",
-                     }} />
-              ))}
-              <Box component="span" sx={{ ...ellipsisSx, fontSize: 12, fontWeight: 600 }}>
-                {r.upper_garment || "—"}
-              </Box>
-            </Stack>
-          ),
-        }]
-      : []),
-    {
-      key: "detected", label: "Detected at", width: 132,
-      // Wraps to two lines rather than forcing the table wider on a phone.
-      render: (r) => <Box component="span" sx={{ whiteSpace: "normal" }}>{fmtWhen(r)}</Box>,
-    },
-    {
-      key: "status", label: "Status", width: 126, hideBelow: "sm",
-      render: (r) => {
-        const verdict = feedbackFor ? feedbackFor(r) : null;
-        return verdict === "verified" ? (
-          <Chip size="small" color="success" variant="outlined"
-                icon={<ThumbUpAltIcon sx={{ fontSize: 13 }} />} label="Verified"
-                sx={{ maxWidth: "100%", height: 22, fontSize: 11 }} />
-        ) : verdict === "false_positive" ? (
-          <Chip size="small" color="error" variant="outlined"
-                icon={<ThumbDownAltIcon sx={{ fontSize: 13 }} />} label="False positive"
-                sx={{ maxWidth: "100%", height: 22, fontSize: 11 }} />
-        ) : (
-          <Chip size="small" variant="outlined" label="Active"
-                sx={{ maxWidth: "100%", height: 22, fontSize: 11 }} />
-        );
-      },
-    },
-    {
-      key: "view", label: "View", align: "center", width: 68,
-      render: (_r, i) => (
-        <IconButton size="small" aria-label="View detection"
-                    onClick={(e) => { e.stopPropagation(); onView(i); }}>
-          <VisibilityOutlinedIcon fontSize="small" />
-        </IconButton>
-      ),
-    },
+  const columns: { key: string; label: string; align?: "right" | "center" }[] = [
+    { key: "capture", label: "Capture" },
+    { key: "event", label: "Event" },
+    { key: "camera", label: "Camera" },
+    ...(caps.duration ? [{ key: "duration", label: "Duration" }] : []),
+    ...(caps.confidence ? [{ key: "confidence", label: "Confidence" }] : []),
+    ...(caps.identity ? [{ key: "identity", label: "Identity" }] : []),
+    ...(caps.appearance ? [{ key: "appearance", label: "Appearance" }] : []),
+    { key: "detected", label: "Detected at" },
+    { key: "status", label: "Status" },
+    { key: "view", label: "View", align: "center" as const },
   ];
-
-  /** Width + responsive visibility, applied identically to header and body. */
-  const colSx = (c: Column) => ({
-    width: c.width, minWidth: c.width, maxWidth: c.width,
-    ...(c.hideBelow
-      ? { display: { xs: "none", [c.hideBelow]: "table-cell" } }
-      : {}),
-  });
 
   return (
     <Paper sx={{ ...contentCardSx, p: 0, overflow: "hidden" }}>
-      <TableContainer sx={{ maxHeight: 720, overflowX: "auto" }}>
-        <Table size="small" stickyHeader sx={{ width: "100%", tableLayout: "fixed" }}>
+      <TableContainer sx={{ maxHeight: 720 }}>
+        <Table size="small" stickyHeader>
           <TableHead>
             <TableRow>
               {columns.map((c) => (
-                <TableCell key={c.key} sx={{ ...tableHeadSx, ...colSx(c) }} align={c.align}>
-                  {c.label}
-                </TableCell>
+                <TableCell key={c.key} sx={tableHeadSx} align={c.align}>{c.label}</TableCell>
               ))}
             </TableRow>
           </TableHead>
@@ -281,7 +124,7 @@ export function MonitoringEventsTable({
               Array.from({ length: 8 }).map((_, i) => (
                 <TableRow key={`sk-${i}`}>
                   {columns.map((c) => (
-                    <TableCell key={c.key} sx={{ ...tableCellSx, ...colSx(c) }}>
+                    <TableCell key={c.key} sx={tableCellSx}>
                       <Skeleton variant={c.key === "capture" ? "rectangular" : "text"}
                                 width={c.key === "capture" ? 56 : "80%"}
                                 height={c.key === "capture" ? 40 : 18} />
@@ -301,15 +144,116 @@ export function MonitoringEventsTable({
               </TableRow>
             )}
 
-            {!loading && rows.map((r, i) => (
-              <TableRow key={r.id} hover sx={{ cursor: "pointer" }} onClick={() => onView(i)}>
-                {columns.map((c) => (
-                  <TableCell key={c.key} sx={{ ...tableCellSx, ...colSx(c) }} align={c.align}>
-                    {c.render(r, i)}
+            {!loading && rows.map((r, i) => {
+              const verdict = feedbackFor ? feedbackFor(r) : null;
+              const thumb = r.posterUrl || (!r.isVideo ? r.mediaUrl : undefined);
+              return (
+                <TableRow key={r.id} hover sx={{ cursor: "pointer" }} onClick={() => onView(i)}>
+                  <TableCell sx={tableCellSx}>
+                    <Box sx={{ position: "relative", width: 56, height: 40 }}>
+                      {thumb ? (
+                        <Box
+                          component="img" src={thumb} alt="" loading="lazy" sx={thumbSx}
+                          // Poster URLs are offered before the file exists, so a
+                          // few will 404 (a clip too large to render one). Hide
+                          // the element rather than show a broken-image icon.
+                          onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = "hidden"; }}
+                        />
+                      ) : (
+                        <Box sx={{ ...thumbSx, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <Typography variant="caption" color="text.disabled">—</Typography>
+                        </Box>
+                      )}
+                      {r.isVideo && (
+                        <PlayCircleFilledRoundedIcon
+                          sx={{
+                            position: "absolute", inset: 0, m: "auto", fontSize: 20,
+                            color: "rgba(255,255,255,.95)", filter: "drop-shadow(0 1px 3px rgba(0,0,0,.7))",
+                          }}
+                        />
+                      )}
+                    </Box>
                   </TableCell>
-                ))}
-              </TableRow>
-            ))}
+
+                  <TableCell sx={tableCellSx}>
+                    {(() => {
+                      // Per-row when the table mixes modules, page-level otherwise.
+                      const rm = moduleForRow ? moduleForRow(r) : module;
+                      return (
+                        <Chip
+                          size="small" label={rm.eventNoun}
+                          sx={{
+                            height: 22, fontSize: 11, fontWeight: 700,
+                            bgcolor: `${rm.colour}1A`, color: rm.colour,
+                            border: `1px solid ${rm.colour}44`,
+                          }}
+                        />
+                      );
+                    })()}
+                  </TableCell>
+
+                  <TableCell sx={tableCellSx}>
+                    <Tooltip title={r.camera_key || ""}>
+                      <span>{cameraLabel ? cameraLabel(r.camera_key || "") : (r.camera_key || "—").trim()}</span>
+                    </Tooltip>
+                  </TableCell>
+
+                  {caps.duration && <TableCell sx={tableCellSx}>{fmtDuration(r.dwell_seconds)}</TableCell>}
+
+                  {caps.confidence && (
+                    <TableCell sx={tableCellSx}>
+                      {r.confidence == null ? "—" : `${Math.round(Number(r.confidence) * 100)}%`}
+                    </TableCell>
+                  )}
+
+                  {caps.identity && (
+                    <TableCell sx={tableCellSx}>
+                      {r.global_id ? `GID ${r.global_id}` : r.tag || "—"}
+                    </TableCell>
+                  )}
+
+                  {caps.appearance && (
+                    <TableCell sx={tableCellSx}>
+                      <Stack direction="row" spacing={0.5} sx={{ flexWrap: "wrap", gap: 0.5 }}>
+                        {(r.colours || []).filter((c) => c.region === "upper").slice(0, 2).map((c, idx) => (
+                          <Box key={idx} title={`${c.name} ${c.percentage ?? ""}%`}
+                               sx={{
+                                 width: 14, height: 14, borderRadius: "3px",
+                                 border: "1px solid rgba(0,0,0,.22)",
+                                 bgcolor: c.rgb && c.rgb.length === 3 ? `rgb(${c.rgb.join(",")})` : "#999",
+                               }} />
+                        ))}
+                        <Box component="span" sx={{ fontSize: 12, fontWeight: 600 }}>
+                          {r.upper_garment || "—"}
+                        </Box>
+                      </Stack>
+                    </TableCell>
+                  )}
+
+                  <TableCell sx={tableCellSx}>{fmtWhen(r)}</TableCell>
+
+                  <TableCell sx={tableCellSx}>
+                    {verdict === "verified" ? (
+                      <Chip size="small" color="success" variant="outlined"
+                            icon={<ThumbUpAltIcon sx={{ fontSize: 13 }} />} label="Verified"
+                            sx={{ height: 22, fontSize: 11 }} />
+                    ) : verdict === "false_positive" ? (
+                      <Chip size="small" color="error" variant="outlined"
+                            icon={<ThumbDownAltIcon sx={{ fontSize: 13 }} />} label="False positive"
+                            sx={{ height: 22, fontSize: 11 }} />
+                    ) : (
+                      <Chip size="small" variant="outlined" label="Active" sx={{ height: 22, fontSize: 11 }} />
+                    )}
+                  </TableCell>
+
+                  <TableCell sx={tableCellSx} align="center">
+                    <IconButton size="small" onClick={(e) => { e.stopPropagation(); onView(i); }}>
+                      <VisibilityOutlinedIcon fontSize="small" />
+                    </IconButton>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
       </TableContainer>

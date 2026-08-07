@@ -617,26 +617,19 @@ export function ChefAbsencePage() {
 
             {rowsQ.isError && <Alert severity="error" sx={{ m: 1.5 }}>Could not load records.</Alert>}
 
-            {/* `table-layout: fixed` at 100% width, matching the shared
-                MonitoringEventsTable: the header row's widths set the columns
-                for the whole table, so headers and row content stay on the same
-                vertical lines and a long camera key or garment string
-                ellipsizes inside its cell instead of widening the table past
-                the edge of the card. The one column with no width (Camera, or
-                Garments on the detections tab) absorbs the slack. */}
-            <TableContainer sx={{ overflowX: "auto" }}>
-              <Table size="small" sx={{ width: "100%", tableLayout: "fixed" }}>
+            <TableContainer>
+              <Table size="small">
                 <TableHead>
                   <TableRow>
-                    <TableCell sx={{ ...tableHeadSx, width: 78 }}>Evidence</TableCell>
-                    <TableCell sx={{ ...tableHeadSx, width: 150 }}>When</TableCell>
+                    <TableCell sx={tableHeadSx}>Evidence</TableCell>
+                    <TableCell sx={tableHeadSx}>When</TableCell>
                     {tab !== 1 && <TableCell sx={tableHeadSx}>Camera</TableCell>}
-                    {tab === 0 && <TableCell sx={{ ...tableHeadSx, width: 116 }} align="right">Clip length</TableCell>}
-                    {tab === 1 && <TableCell sx={{ ...tableHeadSx, width: 116 }} align="right">Sequence</TableCell>}
-                    {tab === 2 && <TableCell sx={{ ...tableHeadSx, width: 120 }}>Role</TableCell>}
-                    {tab === 2 && <TableCell sx={{ ...tableHeadSx, width: 116 }}>Headwear</TableCell>}
-                    {tab === 2 && <TableCell sx={{ ...tableHeadSx, width: 170 }}>Garments</TableCell>}
-                    <TableCell sx={{ ...tableHeadSx, width: 68 }} align="right">View</TableCell>
+                    {tab === 0 && <TableCell sx={tableHeadSx} align="right">Clip length</TableCell>}
+                    {tab === 1 && <TableCell sx={tableHeadSx} align="right">Sequence</TableCell>}
+                    {tab === 2 && <TableCell sx={tableHeadSx}>Role</TableCell>}
+                    {tab === 2 && <TableCell sx={tableHeadSx}>Headwear</TableCell>}
+                    {tab === 2 && <TableCell sx={tableHeadSx}>Garments</TableCell>}
+                    <TableCell sx={tableHeadSx} align="right">View</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
