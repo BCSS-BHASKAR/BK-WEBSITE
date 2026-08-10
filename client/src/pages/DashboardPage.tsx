@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Box } from "@mui/material";
-import { InferenceAnalyticsView } from "../components/dashboard/InferenceAnalyticsView";
+import { BkDashboardView } from "../components/dashboard/bk/BkDashboardView";
 import { MastheadDashboardToolbar } from "../components/MastheadDashboardToolbar";
 import { useShellHeader } from "../context/ShellHeaderContext";
 import { pageLayoutSx } from "../lib/uiSurfaces";
@@ -12,10 +12,12 @@ import {
 // actually capture (walk-ins, loitering, intrusion, after-hours), read from the
 // inference tables.
 //
-// It previously rendered DashboardOperationalView, which queried the legacy
-// ANPR tables - vehicle reads, plate analytics, traffic violations. Nothing
-// writes to those at this site, so every tile read zero. That component is left
-// in the tree, unreferenced, in case the vehicle module is ever commissioned.
+// The body is BkDashboardView, built to the Biryani Katha green design: KPI row,
+// walk-ins trend beside the live camera wall, three detail panels, the fleet
+// health bar and the value-props strip. It replaced InferenceAnalyticsView,
+// which is left in the tree unreferenced - as DashboardOperationalView already
+// was - because it still holds the per-service small multiples and the
+// upper-garment colour chart that the new design has no slot for.
 
 // The page opens directly on the KPI row. The in-page "Operations Analytics"
 // heading, the intro paragraph, the ingest-status line and the auto-refresh
@@ -63,7 +65,7 @@ export function DashboardPage() {
 
   return (
     <Box sx={pageLayoutSx}>
-      <InferenceAnalyticsView from={from} to={to} />
+      <BkDashboardView from={from} to={to} />
     </Box>
   );
 }
