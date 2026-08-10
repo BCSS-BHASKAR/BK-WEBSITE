@@ -86,8 +86,8 @@ export function PoweredByBcss({ variant = "sidebar" }: Props) {
         </Typography>
         <Box
           sx={{
-            px: 2,
-            py: 0.5,
+            px: 2.5,
+            py: 1,
             borderRadius: 2,
             bgcolor: "#FFFFFF",
             border: "1px solid rgba(203, 213, 225, 0.7)",
@@ -95,6 +95,7 @@ export function PoweredByBcss({ variant = "sidebar" }: Props) {
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
+            maxWidth: "100%",
             transition: "all 0.2s ease",
             "&:hover": {
               transform: "translateY(-1px)",
@@ -102,11 +103,15 @@ export function PoweredByBcss({ variant = "sidebar" }: Props) {
             },
           }}
         >
+          {/* The logo is a 803x162 wordmark, so height drives width at roughly
+              5:1 - at the old 22px it came out ~110px wide and the company name
+              inside it was unreadable. maxWidth guards the card on a narrow
+              viewport, where height alone would let it overflow. */}
           <Box
             component="img"
             src={LOGO_SRC}
             alt="Blue Cloud Softtech"
-            sx={{ height: 22, width: "auto", objectFit: "contain" }}
+            sx={{ height: 42, width: "auto", maxWidth: "100%", objectFit: "contain" }}
           />
         </Box>
       </Box>
