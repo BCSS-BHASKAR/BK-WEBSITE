@@ -114,6 +114,18 @@ async function presignGet(key, { ttlSeconds = DEFAULT_TTL, downloadName = null }
   return getSignedUrl(s3(), cmd, { expiresIn });
 }
 
+/**
+ * The object as a Node readable, for piping straight into an archive.
+ *
+ * Deliberately NOT getObjectText/Head: those materialise the body, and these are
+ * 30 MB clips. Streaming keeps the whole zip export off the heap and off the
+ * disk, which the deployment box has ~2 GB of.
+ */
+async function getObjectStream(key) {
+  const res = await s3().send(new GetObjectCommand({ Bucket: BUCKET, Key: key }));
+  return { body: res.Body, size: Number(res.ContentLength || 0), contentType: res.ContentType || null };
+}
+
 /** Cheap connectivity/permission probe used by the health endpoint. */
 async function probe() {
   const res = await s3().send(
@@ -124,5 +136,5 @@ async function probe() {
 
 module.exports = {
   BUCKET, REGION, PREFIX,
-  listObjects, getObjectText, getObjectHead, getObjectTail, presignGet, probe,
+  listObjects, getObjectText, getObjectHead, getObjectTail, presignGet, getObjectStream, probe,
 };

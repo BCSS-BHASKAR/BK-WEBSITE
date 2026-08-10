@@ -10,7 +10,9 @@
 
 const express = require("express");
 const { pool } = require("../db");
-const { presignGet, probe } = require("../lib/inferenceS3");
+const { presignGet, getObjectStream, probe } = require("../lib/inferenceS3");
+const { ZipStream } = require("../lib/zipStream");
+const crypto = require("crypto");
 const { runIngest } = require("../lib/inferenceIngest");
 const {
   posterFile, hasPoster, ensurePoster, posterUrl, verifyPosterUrl, fetchBytesFor,
@@ -638,6 +640,207 @@ clipRouter.get("/:assetId", async (req, res) => {
   }
 });
 
+
+// ---------------------------------------------------------------------------
+// Media export (ZIP)
+//
+// Two endpoints on purpose. The TICKET is authenticated and RBAC-checked; it
+// counts the set and hands back a short-TTL signed URL. The DOWNLOAD is signed
+// rather than bearer-authenticated, because a browser download has to be a
+// plain navigation - fetch()ing a multi-hundred-megabyte archive into a Blob
+// just to save it puts the whole thing in the tab's memory.
+//
+// The signature covers the exact scope (module, dates, camera), so a ticket
+// issued for one day's loitering clips cannot be edited into the whole archive.
+// ---------------------------------------------------------------------------
+
+/** Hard ceilings, so one click can never try to pack the entire bucket. */
+const ZIP_MAX_FILES = Number(process.env.INFERENCE_ZIP_MAX_FILES || 200);
+const ZIP_MAX_BYTES = Number(process.env.INFERENCE_ZIP_MAX_BYTES || 2 * 1024 * 1024 * 1024);
+const ZIP_TTL_SECONDS = Number(process.env.INFERENCE_ZIP_TTL || 600);
+
+function zipScopeString(q) {
+  return [q.module, q.from || "", q.to || "", q.camera || ""].join("|");
+}
+function zipSign(scope, exp) {
+  return crypto
+    .createHmac("sha256", process.env.JWT_SECRET || "inference-zip-fallback")
+    .update(`zip:${scope}:${exp}`)
+    .digest("hex")
+    .slice(0, 32);
+}
+
+/**
+ * Which column carries a module's evidence.
+ *
+ * Not uniform: walk-ins store two, a body crop and a FACE crop. Only the body
+ * crop is exported. The face crop is biometric material - it is why the
+ * walk-ins grant exists at all - and quietly bundling it into a general "media"
+ * download would move it somewhere the grant no longer governs. The manifest
+ * says so rather than leaving the omission to be discovered.
+ */
+const MODULE_ASSET_COL = {
+  walkins: "crop_asset_id",
+  loitering: "asset_id",
+  intrusion: "asset_id",
+  after_hours: "asset_id",
+  kitchen_unattended: "asset_id",
+  chef_absence: "asset_id",
+};
+
+/** Assets for a module within the current filters, newest first. */
+async function zipCandidates(moduleKey, req) {
+  const m = MODULES[moduleKey];
+  if (!m) return null;
+  const assetCol = MODULE_ASSET_COL[moduleKey];
+  if (!assetCol) return null;
+  const f = buildFilters(req, m.ts, m.cam);
+  const w = [f.sql.replace(/^WHERE /, "")].filter(Boolean);
+  w.push(notFalsePositive(moduleKey, `${m.alias}.id`));
+  const where = `WHERE ${w.join(" AND ")}`;
+  const [rows] = await pool.query(
+    `SELECT ${m.alias}.id, ${m.cam} AS camera, ${m.ts} AS detected_at,
+            media.s3_key, media.size_bytes, media.content_type
+       FROM ${m.table} ${m.alias}
+       JOIN media_asset media ON media.id = ${m.alias}.${assetCol}
+       ${where} ORDER BY ${m.ts} DESC LIMIT 5000`,
+    f.params
+  );
+  return rows;
+}
+
+/** Apply the ceilings, and report exactly what they excluded. */
+function applyZipCaps(rows) {
+  const included = [];
+  let bytes = 0;
+  for (const r of rows) {
+    const size = Number(r.size_bytes || 0);
+    if (included.length >= ZIP_MAX_FILES) break;
+    if (bytes + size > ZIP_MAX_BYTES) break;
+    included.push(r);
+    bytes += size;
+  }
+  return { included, bytes, skipped: rows.length - included.length };
+}
+
+router.get("/export/:module/media-ticket", async (req, res) => {
+  try {
+    const moduleKey = req.params.module;
+    const rows = await zipCandidates(moduleKey, req);
+    if (!rows) return res.status(404).json({ error: "unknown_module" });
+
+    const { included, bytes, skipped } = applyZipCaps(rows);
+    if (!included.length) {
+      return res.json({ files: 0, bytes: 0, skipped: 0, matched: rows.length, url: null });
+    }
+
+    const scope = zipScopeString({
+      module: moduleKey,
+      from: String(req.query.from || ""),
+      to: String(req.query.to || ""),
+      camera: String(req.query.camera || ""),
+    });
+    const exp = Math.floor(Date.now() / 1000) + ZIP_TTL_SECONDS;
+    const qs = new URLSearchParams({
+      module: moduleKey,
+      from: String(req.query.from || ""),
+      to: String(req.query.to || ""),
+      camera: String(req.query.camera || ""),
+      e: String(exp),
+      s: zipSign(scope, exp),
+    });
+    res.json({
+      files: included.length,
+      bytes,
+      skipped,
+      matched: rows.length,
+      maxFiles: ZIP_MAX_FILES,
+      maxBytes: ZIP_MAX_BYTES,
+      url: `/api/inference/media-zip?${qs.toString()}`,
+    });
+  } catch (e) {
+    console.error("inference media-ticket", e);
+    res.status(500).json({ error: "server_error" });
+  }
+});
+
+const mediaZipRouter = express.Router();
+mediaZipRouter.get("/", async (req, res) => {
+  try {
+    const moduleKey = String(req.query.module || "");
+    const scope = zipScopeString({
+      module: moduleKey,
+      from: String(req.query.from || ""),
+      to: String(req.query.to || ""),
+      camera: String(req.query.camera || ""),
+    });
+    const exp = Number(req.query.e);
+    if (!Number.isFinite(exp) || exp < Math.floor(Date.now() / 1000)) return res.status(403).end();
+    const expected = zipSign(scope, exp);
+    const given = Buffer.from(String(req.query.s || ""));
+    const want = Buffer.from(expected);
+    if (given.length !== want.length || !crypto.timingSafeEqual(given, want)) {
+      return res.status(403).end();
+    }
+
+    const rows = await zipCandidates(moduleKey, req);
+    if (!rows) return res.status(404).end();
+    const { included, bytes, skipped } = applyZipCaps(rows);
+
+    const stamp = new Date().toISOString().slice(0, 10);
+    res.setHeader("Content-Type", "application/zip");
+    res.setHeader("Content-Disposition", `attachment; filename="${moduleKey}-media-${stamp}.zip"`);
+    // No Content-Length: the archive is produced as it is sent. Chunked is the
+    // honest answer, and a wrong length would truncate the download.
+    res.setHeader("Cache-Control", "no-store");
+
+    const zip = new ZipStream(res);
+
+    // The manifest goes FIRST so it is readable even if a later object fails
+    // mid-stream, and it is what makes the caps auditable rather than silent.
+    const manifest = [
+      `${moduleKey} media export`,
+      `generated: ${new Date().toISOString()}`,
+      `range: ${req.query.from || "all"} .. ${req.query.to || "all"}`,
+      `camera: ${req.query.camera || "all"}`,
+      `matched: ${rows.length}`,
+      `included: ${included.length}`,
+      `skipped: ${skipped}${skipped ? ` (limit ${ZIP_MAX_FILES} files / ${Math.round(ZIP_MAX_BYTES / 1048576)} MB)` : ""}`,
+      `bytes: ${bytes}`,
+      ...(moduleKey === "walkins"
+        ? ["note: body crops only - face crops are excluded from media exports"]
+        : []),
+      "",
+      "id,camera,detected_at,file",
+      ...included.map((r) => {
+        const file = String(r.s3_key).split("/").pop();
+        return `${r.id},${String(r.camera || "").trim()},${new Date(r.detected_at).toISOString()},${file}`;
+      }),
+      "",
+    ].join("\n");
+    await zip.addBuffer("manifest.txt", Buffer.from(manifest, "utf8"));
+
+    for (const r of included) {
+      if (res.writableEnded || res.destroyed) break;
+      try {
+        const obj = await getObjectStream(r.s3_key);
+        // Prefix with the detection id so a file can be traced back to the row
+        // it came from - S3 basenames alone repeat across cameras and days.
+        await zip.addStream(`${r.id}-${String(r.s3_key).split("/").pop()}`, obj.body);
+      } catch (err) {
+        console.warn(`[media-zip] skipped ${r.s3_key}:`, err.message);
+      }
+    }
+
+    zip.finish();
+    res.end();
+  } catch (e) {
+    console.error("inference media-zip", e);
+    if (!res.headersSent) res.status(500).end();
+    else res.destroy();
+  }
+});
+
 /**
  * Every media object, including the ~390 walk-in crops and face crops that
  * have no JSONL metadata and therefore appear in no service table. Without
@@ -1256,4 +1459,5 @@ module.exports = {
   inferenceRouter: router,
   inferencePosterRouter: posterRouter,
   inferenceClipRouter: clipRouter,
+  inferenceMediaZipRouter: mediaZipRouter,
 };

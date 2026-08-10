@@ -168,6 +168,47 @@ export function MonitoringPage() {
     [camerasQ.data, key]
   );
 
+  const [mediaExportBusy, setMediaExportBusy] = useState(false);
+
+  /**
+   * Pack the filtered set's stills and clips into a ZIP.
+   *
+   * Two steps rather than one: the ticket endpoint is authenticated and reports
+   * exactly what the archive would contain, and only then does the browser
+   * navigate to a signed URL to actually download it. Navigating is what lets
+   * the browser stream a large archive to disk with its own progress UI -
+   * fetching it into a Blob first would hold the whole thing in the tab.
+   *
+   * The size is confirmed before starting because these are 30 MB clips: a
+   * day of chef_absence is comfortably over a gigabyte, and nobody should
+   * discover that after clicking.
+   */
+  const onExportMedia = useCallback(async () => {
+    setMediaExportBusy(true);
+    try {
+      const { data } = await api.get(`/inference/export/${key}/media-ticket`, { params: scopeParams });
+      if (!data.files) {
+        setToast("No stored media matches these filters.");
+        return;
+      }
+      const mb = Math.max(1, Math.round(data.bytes / 1048576));
+      const capped = data.skipped
+        ? `\n\nOnly the ${data.files} most recent of ${data.matched} are included — the export is capped at ${data.maxFiles} files and ${Math.round(data.maxBytes / 1048576)} MB. A manifest.txt inside the zip lists exactly what you got.`
+        : "";
+      const ok = window.confirm(
+        `Download ${data.files} file${data.files === 1 ? "" : "s"} (about ${mb} MB) as a ZIP?${capped}`
+      );
+      if (!ok) return;
+      // A plain navigation, so the browser downloads it rather than the tab
+      // buffering it. The URL is signed and scoped to these exact filters.
+      window.location.href = `${apiBase.replace(/\/api$/, "")}${data.url}`;
+    } catch {
+      setToast("Could not prepare the media export.");
+    } finally {
+      setMediaExportBusy(false);
+    }
+  }, [key, scopeParams]);
+
   const onExport = useCallback(() => {
     // Export honours the current filters. Uses a token-bearing fetch rather than
     // a bare link because the endpoint is authenticated.
@@ -232,6 +273,8 @@ export function MonitoringPage() {
         cameras={cameraOptions}
         resultCount={total}
         onExport={onExport}
+        onExportMedia={onExportMedia}
+        mediaExportBusy={mediaExportBusy}
       />
 
       {/* Charts and the derived readings of them sit side by side, so the

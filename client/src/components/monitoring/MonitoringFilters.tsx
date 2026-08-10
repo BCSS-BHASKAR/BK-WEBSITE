@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Box, Button, InputAdornment, MenuItem, Paper, Stack, TextField } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
+import FolderZipOutlinedIcon from "@mui/icons-material/FolderZipOutlined";
 import { contentCardSx } from "../../lib/uiSurfaces";
 import { filterFieldSx } from "./monitoringTokens";
 import type { InferenceModule } from "../../lib/inferenceModules";
@@ -30,6 +31,9 @@ type Props = {
   cameras: { camera_key: string }[];
   resultCount?: number;
   onExport?: () => void;
+  /** Packs the filtered set's stills and clips into a ZIP. */
+  onExportMedia?: () => void;
+  mediaExportBusy?: boolean;
 };
 
 /**
@@ -40,7 +44,9 @@ type Props = {
  * walk-ins, minimum-duration only for loitering. There is deliberately no Site
  * control: nothing in the inference data links a detection to a site yet.
  */
-export function MonitoringFilters({ module, value, onChange, cameras, resultCount, onExport }: Props) {
+export function MonitoringFilters({
+  module, value, onChange, cameras, resultCount, onExport, onExportMedia, mediaExportBusy,
+}: Props) {
   // Search is debounced so a keystroke does not become a request. (ViolationsPage
   // puts the raw input straight into its query key and fires per character.)
   const [searchDraft, setSearchDraft] = useState(value.search);
@@ -149,6 +155,17 @@ export function MonitoringFilters({ module, value, onChange, cameras, resultCoun
         )}
         {onExport && (
           <Button size="small" variant="outlined" onClick={onExport}>Export CSV</Button>
+        )}
+        {onExportMedia && (
+          <Button
+            size="small"
+            variant="outlined"
+            startIcon={<FolderZipOutlinedIcon />}
+            onClick={onExportMedia}
+            disabled={mediaExportBusy}
+          >
+            {mediaExportBusy ? "Preparing…" : "Download media"}
+          </Button>
         )}
         <Button
           size="small" startIcon={<RestartAltIcon />} disabled={!dirty}

@@ -103,7 +103,17 @@ function pageForApiPath(path) {
   let best = null;
   for (const p of PAGES) {
     for (const prefix of p.api) {
-      if (path === prefix || path.startsWith(`${prefix}/`) || path.startsWith(`${prefix}?`)) {
+      // `${prefix}.` matters: the CSV export is /inference/export/walkins.csv,
+      // which matched none of the other three forms - so every module's export
+      // was reaching the handler with no page check, and any signed-in account
+      // could pull a module it had not been granted. The endpoints still
+      // required authentication; it was the per-page grant that was skipped.
+      if (
+        path === prefix ||
+        path.startsWith(`${prefix}/`) ||
+        path.startsWith(`${prefix}?`) ||
+        path.startsWith(`${prefix}.`)
+      ) {
         if (!best || prefix.length > best.prefix.length) best = { page: p, prefix };
       }
     }

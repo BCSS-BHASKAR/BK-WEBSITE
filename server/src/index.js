@@ -19,7 +19,9 @@ const { walkingEnrollRouter, walkingEnrollMediaRouter } = require("./routes/walk
 const { chatAuditRouter } = require("./routes/chatAudit");
 const { challanRouter } = require("./routes/challan");
 const { startCameraAlertMonitor } = require("./lib/cameraAlertMonitor");
-const { inferenceRouter, inferencePosterRouter, inferenceClipRouter } = require("./routes/inference");
+const {
+  inferenceRouter, inferencePosterRouter, inferenceClipRouter, inferenceMediaZipRouter,
+} = require("./routes/inference");
 const { settingsRouter } = require("./routes/settings");
 const { rbacRouter, ensureRbacSeed } = require("./routes/rbac");
 const { requirePageAccess } = require("./middleware/requirePageAccess");
@@ -61,6 +63,12 @@ app.use("/api/inference/poster", inferencePosterRouter);
 // header either, so the HMAC on the URL is the access control. Also mounted
 // before the authenticated router.
 app.use("/api/inference/clip", inferenceClipRouter);
+// Media ZIP export. Signed rather than bearer-authenticated for the same reason
+// as the two above: a browser download is a plain navigation, and fetching a
+// multi-hundred-megabyte archive into a Blob to save it would hold the whole
+// thing in the tab's memory. The RBAC check happens when the ticket is issued
+// on the authenticated router, and the signature pins the exact scope.
+app.use("/api/inference/media-zip", inferenceMediaZipRouter);
 // Inference viewer (S3 -> Postgres). Authenticated: the media it exposes
 // includes face crops and is treated as biometric data.
 app.use("/api/inference", requireAuth, requirePageAccess, inferenceRouter);
