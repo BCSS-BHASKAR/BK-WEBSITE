@@ -197,7 +197,17 @@ export function MonitoringMediaViewer({
             component="img"
             src={row.mediaUrl}
             alt={`${module.eventNoun} ${row.id}`}
-            sx={{ width: "100%", maxHeight: "72vh", objectFit: "contain", display: "block" }}
+            // maxWidth rather than width: a forced 100% upscales the small
+            // walk-in crops to the dialog width and renders them soft. Paired
+            // with contain and a bounded height, the whole frame is always
+            // visible and never enlarged past its own resolution.
+            sx={{
+              display: "block",
+              mx: "auto",
+              maxWidth: "100%",
+              maxHeight: "78vh",
+              objectFit: "contain",
+            }}
           />
         )}
 

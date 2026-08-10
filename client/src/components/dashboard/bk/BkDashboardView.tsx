@@ -14,6 +14,7 @@ import type { MonitoringRow } from "../../monitoring/MonitoringEventsTable";
 import { bk, BK_GAP } from "./bkTokens";
 import { StandingPersonIcon } from "./bkIcons";
 import { BkKpiRow, type Delta } from "./BkKpiRow";
+import { buildDelta, previousRange } from "../../../lib/rangeCompare";
 import { BkWalkinsTrend, type TrendGrain, type TrendPoint } from "./BkWalkinsTrend";
 import { BkLiveCameras, type CameraMetric, type CameraTile } from "./BkLiveCameras";
 import { BkIntruderPanel, type IntruderRow, type IntruderSeverity } from "./BkIntruderPanel";
@@ -88,34 +89,27 @@ function hourLabel(h: number): string {
 }
 
 /**
- * Day-over-day change for one service.
+ * Period-over-period change for one service.
  *
- * byDay only contains days that HAVE events, so the two most recent ROWS are
- * not necessarily consecutive days - reading them directly would compare today
- * against whenever the module last fired and call the result "vs yesterday".
- * The range's day axis is built out and zero-filled first, so the comparison is
- * always the last two calendar days.
+ * Counts the WHOLE selected range and compares it with the equal-length window
+ * immediately before it, so the percentage describes the number printed above
+ * it. An earlier version always compared the last two calendar days, which on a
+ * "Last 30 days" view put a today-vs-yesterday delta under a 30-day total.
+ *
+ * Both windows are summed from byDay, which only contains days that HAVE
+ * events - absent days are simply not added, which is the same as zero.
  */
-function deltaFor(byDay: Stats["byDay"], service: string, from?: string, to?: string): Delta {
+function deltaFor(
+  byDay: Stats["byDay"],
+  prevByDay: Stats["byDay"],
+  service: string,
+  from?: string,
+  to?: string
+): Delta {
   if (!from || !to) return { pct: null, label: "no comparison range" };
-  const counts = new Map<string, number>();
-  for (const r of byDay) {
-    if (r.service !== service) continue;
-    const day = String(r.day).slice(0, 10);
-    counts.set(day, (counts.get(day) || 0) + Number(r.n));
-  }
-  const last = dayjs(to);
-  const prev = last.subtract(1, "day");
-  if (prev.isBefore(dayjs(from))) return { pct: null, label: "single-day range" };
-
-  const lastN = counts.get(last.format("YYYY-MM-DD")) || 0;
-  const prevN = counts.get(prev.format("YYYY-MM-DD")) || 0;
-  // Growth from zero is undefined, not infinite. Say so rather than print a
-  // percentage the data cannot support.
-  if (prevN === 0) return { pct: null, label: lastN > 0 ? "no prior-day baseline" : "no change" };
-
-  const suffix = to === ymdSite() ? "vs yesterday" : "vs prev. day";
-  return { pct: Math.round(((lastN - prevN) / prevN) * 1000) / 10, label: suffix };
+  const sum = (rows: Stats["byDay"]) =>
+    rows.reduce((a, r) => (r.service === service ? a + Number(r.n) : a), 0);
+  return buildDelta(sum(byDay), sum(prevByDay), from, to);
 }
 
 export function BkDashboardView({ from, to }: { from?: string; to?: string }) {
@@ -145,6 +139,20 @@ export function BkDashboardView({ from, to }: { from?: string; to?: string }) {
   const { data: stats, isLoading: loadingStats } = useQuery({
     queryKey: ["bk", "stats", from, to],
     queryFn: async () => (await api.get("/inference/stats", { params: { days: 14, ...range } })).data as Stats,
+    refetchInterval,
+  });
+
+  /**
+   * The equal-length window immediately before the selected one. Only the KPI
+   * deltas read this; every other panel is scoped to the visible range.
+   */
+  const prevRange = useMemo(() => (from && to ? previousRange(from, to) : null), [from, to]);
+
+  const { data: prevStats } = useQuery({
+    queryKey: ["bk", "stats-prev", prevRange?.from, prevRange?.to],
+    queryFn: async () =>
+      (await api.get("/inference/stats", { params: prevRange! })).data as Stats,
+    enabled: Boolean(prevRange),
     refetchInterval,
   });
 
@@ -234,6 +242,7 @@ export function BkDashboardView({ from, to }: { from?: string; to?: string }) {
   const counts = summary?.counts || {};
   const num = (k: string) => Number(counts[k] || 0);
   const byDay = stats?.byDay || [];
+  const prevByDay = prevStats?.byDay || [];
   const totalAlerts = ALERT_SERVICES.reduce((a, s) => a + num(s), 0);
 
   // Camera tiles: streams supply the feed, stats.byCamera supplies the overlay
@@ -314,13 +323,13 @@ export function BkDashboardView({ from, to }: { from?: string; to?: string }) {
     <Box sx={{ display: "flex", flexDirection: "column", gap: BK_GAP, minWidth: 0 }}>
       <BkKpiRow
         walkins={num("walkins")}
-        walkinsDelta={deltaFor(byDay, "walkins", from, to)}
+        walkinsDelta={deltaFor(byDay, prevByDay, "walkins", from, to)}
         intrusions={num("intrusion")}
-        intrusionsDelta={deltaFor(byDay, "intrusion", from, to)}
+        intrusionsDelta={deltaFor(byDay, prevByDay, "intrusion", from, to)}
         chef={chef}
         nonChef={nonChef}
         loitering={num("loitering")}
-        loiteringDelta={deltaFor(byDay, "loitering", from, to)}
+        loiteringDelta={deltaFor(byDay, prevByDay, "loitering", from, to)}
         totalAlerts={totalAlerts}
         onWalkins={canWalkins ? () => navigate(MODULE_BY_KEY.walkins.route) : undefined}
         onIntrusions={canIntrusion ? () => navigate(MODULE_BY_KEY.intrusion.route) : undefined}

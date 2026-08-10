@@ -8,7 +8,7 @@ import ThumbUpAltIcon from "@mui/icons-material/ThumbUpAlt";
 import ThumbDownAltIcon from "@mui/icons-material/ThumbDownAlt";
 import InboxOutlinedIcon from "@mui/icons-material/InboxOutlined";
 import { contentCardSx } from "../../lib/uiSurfaces";
-import { tableCellSx, tableHeadSx, thumbSx } from "./monitoringTokens";
+import { tableCellSx, tableHeadSx, thumbSx, THUMB_W, THUMB_H } from "./monitoringTokens";
 import type { InferenceModule } from "../../lib/inferenceModules";
 
 export type MonitoringRow = {
@@ -153,7 +153,7 @@ export function MonitoringEventsTable({
               return (
                 <TableRow key={r.id} hover sx={{ cursor: "pointer" }} onClick={() => onView(i)}>
                   <TableCell sx={tableCellSx}>
-                    <Box sx={{ position: "relative", width: 56, height: 40 }}>
+                    <Box sx={{ position: "relative", width: THUMB_W, height: THUMB_H }}>
                       {thumb ? (
                         <Box
                           component="img" src={thumb} alt="" loading="lazy" sx={thumbSx}

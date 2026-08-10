@@ -91,7 +91,7 @@ export function MonitoringAnalytics({
   return (
     <Grid container spacing={1.5}>
       <Grid size={{ xs: 12, md: 6 }}>
-        <Panel title="Daily trend" subtitle="Detections per day">
+        <Panel title="Detections per day" subtitle="Daily totals across the selected range">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={daily} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
               <defs>
@@ -112,7 +112,7 @@ export function MonitoringAnalytics({
       </Grid>
 
       <Grid size={{ xs: 12, md: 6 }}>
-        <Panel title="Hourly distribution" subtitle="By hour of day (site time, IST)">
+        <Panel title="Detections by hour" subtitle="Time of day the events occur (site time, IST)">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={hourly} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
               <CartesianGrid stroke={GRID} vertical={false} />
@@ -130,7 +130,7 @@ export function MonitoringAnalytics({
       </Grid>
 
       <Grid size={{ xs: 12, md: 6 }}>
-        <Panel title="Weekly pattern" subtitle="Detections by day of week">
+        <Panel title="Detections by weekday" subtitle="Which days of the week are busiest">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={weekly} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
               <CartesianGrid stroke={GRID} vertical={false} />
@@ -146,10 +146,10 @@ export function MonitoringAnalytics({
       </Grid>
 
       <Grid size={{ xs: 12, md: 6 }}>
-        <Panel title="Camera distribution" subtitle="Which cameras see this most" height={180}>
+        <Panel title="Detections by camera" subtitle="Share of events recorded by each camera" height={180}>
           <Box sx={{ height: "100%", overflowY: "auto", pr: 0.5 }}>
             {cameras.length === 0 && (
-              <Typography variant="body2" color="text.secondary">No camera activity in range.</Typography>
+              <Typography variant="body2" color="text.secondary">No camera recorded an event in this range.</Typography>
             )}
             {cameras.map((c) => {
               const pct = Math.max(2, (Number(c.n) / Number(cameras[0].n || 1)) * 100);

@@ -14,9 +14,23 @@ import { MonitoringMediaViewer } from "../components/monitoring/MonitoringMediaV
 import {
   EMPTY_FILTERS, MonitoringFilters, type MonitoringFilterState,
 } from "../components/monitoring/MonitoringFilters";
+import { previousRange, todayRange } from "../lib/rangeCompare";
+
 import { getAccessToken } from "../auth/tokenStore";
 import { useAutoRefreshMs } from "../lib/useAppSettings";
 import { RequirePage, type PageKey } from "../lib/permissions";
+
+/**
+ * What a Monitoring page opens on.
+ *
+ * Today rather than all time: the KPI tiles compare the selected window against
+ * the one before it, and an all-time range has no "before" to measure against.
+ * Reset still clears to EMPTY_FILTERS, which is genuinely everything.
+ */
+function defaultFilters(): MonitoringFilterState {
+  const { from, to } = todayRange();
+  return { ...EMPTY_FILTERS, from, to };
+}
 
 const PAGE_SIZE = 20;
 
@@ -35,7 +49,7 @@ export function MonitoringPage() {
   // Interval comes from Settings > General, not a constant.
   const refetchInterval = useAutoRefreshMs();
 
-  const [filters, setFilters] = useState<MonitoringFilterState>({ ...EMPTY_FILTERS });
+  const [filters, setFilters] = useState<MonitoringFilterState>(defaultFilters);
   const [page, setPage] = useState(1);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -61,6 +75,19 @@ export function MonitoringPage() {
     return p;
   }, [filters.from, filters.to, filters.camera]);
 
+  /**
+   * The equal-length window immediately before the selected one, used only for
+   * the KPI deltas. Same endpoint and same camera filter, so the two totals are
+   * produced by identical logic and the percentage between them is meaningful.
+   */
+  const previousScopeParams = useMemo(() => {
+    const prev = filters.from && filters.to ? previousRange(filters.from, filters.to) : null;
+    if (!prev) return null;
+    const p: Record<string, string> = { from: prev.from, to: prev.to };
+    if (filters.camera) p.camera = filters.camera;
+    return p;
+  }, [filters.from, filters.to, filters.camera]);
+
   const enabled = Boolean(mod);
   const key = mod?.key ?? "none";
 
@@ -68,6 +95,13 @@ export function MonitoringPage() {
     queryKey: ["monitoring", key, "kpis", scopeParams],
     queryFn: async () => (await api.get(`/inference/kpis/${key}`, { params: scopeParams })).data as ModuleKpis,
     enabled,
+    refetchInterval,
+  });
+  const prevKpisQ = useQuery({
+    queryKey: ["monitoring", key, "kpis-prev", previousScopeParams],
+    queryFn: async () =>
+      (await api.get(`/inference/kpis/${key}`, { params: previousScopeParams! })).data as ModuleKpis,
+    enabled: enabled && Boolean(previousScopeParams),
     refetchInterval,
   });
   const analyticsQ = useQuery({
@@ -174,6 +208,9 @@ export function MonitoringPage() {
       <MonitoringKpiRow
         module={mod}
         kpis={kpisQ.data}
+        previousKpis={prevKpisQ.data}
+        from={filters.from}
+        to={filters.to}
         loading={kpisQ.isLoading}
         onDrill={() => document.getElementById("monitoring-events")?.scrollIntoView({ behavior: "smooth" })}
       />

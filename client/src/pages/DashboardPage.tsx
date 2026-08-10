@@ -5,7 +5,7 @@ import { MastheadDashboardToolbar } from "../components/MastheadDashboardToolbar
 import { useShellHeader } from "../context/ShellHeaderContext";
 import { pageLayoutSx } from "../lib/uiSurfaces";
 import {
-  type DatePreset, datedRangeFromPreset, defaultLast7Range, normalizeCustomRange,
+  type DatePreset, datedRangeFromPreset, defaultTodayRange, normalizeCustomRange,
 } from "../lib/dashboardRange";
 
 // The dashboard is an analytical view over what the on-prem CV services
@@ -31,8 +31,10 @@ export function DashboardPage() {
 
   // Date range lives here and drives every query below, restoring the masthead
   // range control the operational dashboard used to carry.
-  const [preset, setPreset] = useState<DatePreset>("last7");
-  const initial = defaultLast7Range();
+  // Today by default: the cards below compare against the preceding period, and
+  // "today vs yesterday" is the reading an operator opens the console for.
+  const [preset, setPreset] = useState<DatePreset>("today");
+  const initial = defaultTodayRange();
   const [customFrom, setCustomFrom] = useState(initial.from);
   const [customTo, setCustomTo] = useState(initial.to);
 
@@ -53,8 +55,8 @@ export function DashboardPage() {
         resolvedFrom={from}
         resolvedTo={to}
         onResetToToday={() => {
-          const d = defaultLast7Range();
-          setPreset("last7");
+          const d = defaultTodayRange();
+          setPreset("today");
           setCustomFrom(d.from);
           setCustomTo(d.to);
         }}

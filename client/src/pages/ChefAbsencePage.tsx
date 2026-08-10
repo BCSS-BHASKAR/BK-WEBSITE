@@ -18,7 +18,7 @@ import { pageLayoutSx, contentCardSx } from "../lib/uiSurfaces";
 import { MODULE_BY_KEY } from "../lib/inferenceModules";
 import { MonitoringMediaViewer } from "../components/monitoring/MonitoringMediaViewer";
 import type { FeedbackVerdict, MonitoringRow } from "../components/monitoring/MonitoringEventsTable";
-import { tableCellSx, tableHeadSx, thumbSx, filterFieldSx } from "../components/monitoring/monitoringTokens";
+import { tableCellSx, tableHeadSx, thumbSx, filterFieldSx , THUMB_W, THUMB_H } from "../components/monitoring/monitoringTokens";
 import { getAccessToken } from "../auth/tokenStore";
 import { useAutoRefreshMs } from "../lib/useAppSettings";
 import { RequirePage } from "../lib/permissions";
@@ -651,7 +651,7 @@ export function ChefAbsencePage() {
                     return (
                       <TableRow key={r.id} hover sx={{ cursor: "pointer" }} onClick={() => setViewerIndex(i)}>
                         <TableCell sx={tableCellSx}>
-                          <Box sx={{ position: "relative", width: 56, height: 40 }}>
+                          <Box sx={{ position: "relative", width: THUMB_W, height: THUMB_H }}>
                             {r.posterUrl || (!r.isVideo && r.mediaUrl)
                               ? <Box
                                   component="img" src={r.posterUrl || r.mediaUrl} alt="" sx={thumbSx} loading="lazy"

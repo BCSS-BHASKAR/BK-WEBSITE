@@ -22,6 +22,7 @@ export const EMPTY_FILTERS: MonitoringFilterState = {
   minConfidence: "", minDwell: "",
 };
 
+
 type Props = {
   module: InferenceModule;
   value: MonitoringFilterState;

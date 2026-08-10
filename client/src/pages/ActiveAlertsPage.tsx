@@ -16,6 +16,8 @@ import {
 import { MonitoringMediaViewer } from "../components/monitoring/MonitoringMediaViewer";
 import { filterFieldSx } from "../components/monitoring/monitoringTokens";
 import { useAutoRefreshMs } from "../lib/useAppSettings";
+import { KpiDelta } from "../components/KpiDelta";
+import { buildDelta, previousRange, todayRange } from "../lib/rangeCompare";
 
 // Active Alerts is the cross-module view of everything that warrants attention.
 //
@@ -59,8 +61,9 @@ export function ActiveAlertsPage() {
   const qc = useQueryClient();
   const refetchInterval = useAutoRefreshMs();
   const [service, setService] = useState<string>("");
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
+  // Today by default, so the tiles have a preceding period to compare against.
+  const [from, setFrom] = useState(() => todayRange().from);
+  const [to, setTo] = useState(() => todayRange().to);
   const [camera, setCamera] = useState("");
   const [page, setPage] = useState(1);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
@@ -84,6 +87,30 @@ export function ActiveAlertsPage() {
       queryFn: async () => (await api.get(`/inference/kpis/${m}`, { params: scope })).data as { total: number; latest: string | null },
     }),
   }));
+
+  /**
+   * The same per-module totals over the equal-length window immediately before
+   * the selected one. Only the tile deltas read these.
+   */
+  const prevScope = useMemo(() => {
+    const prev = from && to ? previousRange(from, to) : null;
+    if (!prev) return null;
+    const p: Record<string, string> = { from: prev.from, to: prev.to };
+    if (camera) p.camera = camera;
+    return p;
+  }, [from, to, camera]);
+
+  const prevKpiQueries = TRACKED_MODULES.map((m) => ({
+    key: m,
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    q: useQuery({
+      queryKey: ["alerts", "kpis-prev", m, prevScope],
+      queryFn: async () =>
+        (await api.get(`/inference/kpis/${m}`, { params: prevScope! })).data as { total: number },
+      enabled: Boolean(prevScope),
+    }),
+  }));
+  const prevTotals = new Map(prevKpiQueries.map(({ key, q }) => [key, q.data?.total]));
 
   const rowsQ = useQuery({
     queryKey: ["alerts", "rows", service, scope, page],
@@ -153,11 +180,17 @@ export function ActiveAlertsPage() {
     colour: MODULE_BY_KEY[key].colour,
     isAlert: ALERT_MODULES.includes(key),
     n: q.data?.total ?? 0,
+    prev: prevTotals.get(key),
   }));
   // Alerts only. Walk-ins are displayed beside them but are not added in.
   const alertRows = chartData.filter((r) => r.isAlert);
   const anyFailed = alertRows.some((r) => r.failed);
   const totalAlerts = alertRows.reduce((a, r) => a + r.n, 0);
+  // Undefined until every module's baseline has loaded, so the delta says
+  // "no comparison available" rather than measuring against a partial sum.
+  const prevAlertTotal = alertRows.every((r) => r.prev != null)
+    ? alertRows.reduce((a, r) => a + Number(r.prev), 0)
+    : undefined;
   const loading = kpiQueries.some((k) => k.q.isLoading);
 
   const rows = rowsQ.data?.rows || [];
@@ -189,9 +222,13 @@ export function ActiveAlertsPage() {
                 {anyFailed ? "—" : totalAlerts}
               </Typography>
             )}
-            <Typography variant="caption" color="text.secondary">
-              {anyFailed ? "some modules did not load" : "in selected range"}
-            </Typography>
+            {anyFailed ? (
+              <Typography variant="caption" color="text.secondary">
+                some modules did not load
+              </Typography>
+            ) : (
+              <KpiDelta delta={buildDelta(totalAlerts, prevAlertTotal, from, to)} />
+            )}
           </Paper>
         </Grid>
         {/* Seven equal columns: the total plus six modules. Each card carries
@@ -212,9 +249,11 @@ export function ActiveAlertsPage() {
               {loading ? <Skeleton width="50%" height={30} /> : (
                 <Typography sx={{ fontWeight: 800, fontSize: 26 }}>{c.failed ? "—" : c.n}</Typography>
               )}
-              <Typography variant="caption" color="text.secondary">
-                {c.failed ? "could not load" : "open module"}
-              </Typography>
+              {c.failed ? (
+                <Typography variant="caption" color="text.secondary">could not load</Typography>
+              ) : (
+                <KpiDelta delta={buildDelta(c.n, c.prev, from, to)} />
+              )}
             </Paper>
           </Grid>
         ))}

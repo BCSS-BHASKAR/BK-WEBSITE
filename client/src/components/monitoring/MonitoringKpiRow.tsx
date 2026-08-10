@@ -1,6 +1,8 @@
 import { Box, Grid, Paper, Skeleton, Typography } from "@mui/material";
 import { contentCardSx } from "../../lib/uiSurfaces";
 import type { InferenceModule } from "../../lib/inferenceModules";
+import { KpiDelta } from "../KpiDelta";
+import { buildDelta, rangeLabel, type RangeDelta } from "../../lib/rangeCompare";
 
 export type ModuleKpis = {
   total: number;
@@ -23,7 +25,14 @@ function fmtHour(h: number | null) {
   return h == null ? "—" : `${String(h).padStart(2, "0")}:00`;
 }
 
-type Tile = { label: string; value: string | number; hint?: string; onClick?: () => void };
+type Tile = {
+  label: string;
+  value: string | number;
+  hint?: string;
+  /** Period-over-period movement, shown in place of the hint when present. */
+  delta?: RangeDelta;
+  onClick?: () => void;
+};
 
 /**
  * KPI row for a Monitoring page.
@@ -36,20 +45,36 @@ type Tile = { label: string; value: string | number; hint?: string; onClick?: ()
  * Every figure comes from GET /inference/kpis/:module, which applies the same
  * false-positive suppression as the table below - so a thumbs-down moves the
  * tile and the table together.
+ *
+ * `previousKpis` is the same endpoint over the equal-length window immediately
+ * before the selected one, which is what the total's delta is measured against.
  */
 export function MonitoringKpiRow({
-  module, kpis, loading, onDrill,
+  module, kpis, previousKpis, from, to, loading, onDrill,
 }: {
   module: InferenceModule;
   kpis?: ModuleKpis;
+  previousKpis?: ModuleKpis;
+  from?: string;
+  to?: string;
   loading?: boolean;
   onDrill?: () => void;
 }) {
   const caps = module.capabilities;
   const k = kpis;
+  // With no range set the page is showing all time, so there is no preceding
+  // period to compare against - the tile falls back to naming the range.
+  const comparable = Boolean(from && to);
 
   const tiles: Tile[] = [
-    { label: `Total ${module.label.toLowerCase()}`, value: k?.total ?? 0, hint: "in selected range", onClick: onDrill },
+    {
+      label: `Total ${module.label.toLowerCase()}`,
+      value: k?.total ?? 0,
+      ...(comparable
+        ? { delta: buildDelta(k?.total, previousKpis?.total, from!, to!) }
+        : { hint: rangeLabel(from || "", to || "") }),
+      onClick: onDrill,
+    },
     { label: "Active cameras", value: k?.cameras ?? 0, hint: "reporting this module" },
     ...(caps.duration
       ? [
@@ -89,9 +114,10 @@ export function MonitoringKpiRow({
             ) : (
               <Typography sx={{ fontWeight: 800, fontSize: 24, lineHeight: 1.15 }}>{t.value}</Typography>
             )}
-            {t.hint && !loading && (
+            {!loading && t.delta ? <KpiDelta delta={t.delta} /> : null}
+            {!loading && !t.delta && t.hint ? (
               <Typography variant="caption" color="text.secondary">{t.hint}</Typography>
-            )}
+            ) : null}
           </Paper>
         </Grid>
       ))}

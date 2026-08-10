@@ -24,13 +24,29 @@ export const tableCellSx: SxProps<Theme> = {
   py: 1.15,
 };
 
-/** Thumbnail cell geometry, matching the 56x40 crop used by the existing tables. */
+/**
+ * Thumbnail cell geometry.
+ *
+ * `contain`, not `cover`. The frames are 16:9 and the cell is 7:5, so cover was
+ * cropping roughly a fifth off each side - which on a detection thumbnail is
+ * exactly where the subject entering or leaving the scene tends to be. The dark
+ * plate behind it letterboxes the difference instead of hiding it, and the cell
+ * is a little wider now so the whole frame still reads at this size.
+ *
+ * The dimensions are exported because every call site wraps the image in a
+ * positioned Box of the same size to hang a play badge on. Those wrappers were
+ * hardcoded to the old 56x40 and would have cropped the image right back after
+ * this change.
+ */
+export const THUMB_W = 72;
+export const THUMB_H = 44;
+
 export const thumbSx: SxProps<Theme> = {
-  width: 56,
-  height: 40,
+  width: THUMB_W,
+  height: THUMB_H,
   borderRadius: "6px",
-  objectFit: "cover",
-  bgcolor: "rgba(15, 23, 42, 0.06)",
+  objectFit: "contain",
+  bgcolor: "rgba(15, 23, 42, 0.72)",
   display: "block",
 };
 
