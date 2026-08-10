@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Box, Button, Chip, Dialog, DialogContent, IconButton, Stack, Typography } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
@@ -7,6 +7,8 @@ import ThumbUpAltOutlinedIcon from "@mui/icons-material/ThumbUpAltOutlined";
 import ThumbDownAltOutlinedIcon from "@mui/icons-material/ThumbDownAltOutlined";
 import ThumbUpAltIcon from "@mui/icons-material/ThumbUpAlt";
 import ThumbDownAltIcon from "@mui/icons-material/ThumbDownAlt";
+import DownloadRoundedIcon from "@mui/icons-material/DownloadRounded";
+import VideocamOffRoundedIcon from "@mui/icons-material/VideocamOffRounded";
 import type { InferenceModule } from "../../lib/inferenceModules";
 import type { FeedbackVerdict, MonitoringRow } from "./MonitoringEventsTable";
 
@@ -57,6 +59,23 @@ export function MonitoringMediaViewer({
   const hasPrev = index > 0;
   const hasNext = index < rows.length - 1;
 
+  /**
+   * Set when the browser refuses the clip.
+   *
+   * The chef_absence recorder writes MPEG-4 Part 2 (Simple Profile) inside an
+   * MP4 container. No browser can decode that - Chrome reports
+   * canPlayType('video/mp4; codecs="mp4v.20.8"') as unsupported and fails with
+   * MEDIA_ERR_SRC_NOT_SUPPORTED - so the <video> rendered as a silent black
+   * rectangle with no indication of why. The evidence itself is fine, so rather
+   * than a dead player the viewer says what happened and offers the file, which
+   * plays in VLC or QuickTime.
+   *
+   * Holding the failing row's id rather than a boolean is what lets the message
+   * clear itself when the viewer steps to another detection - deriving it makes
+   * the reset a render-time comparison instead of a setState inside an effect.
+   */
+  const [erroredId, setErroredId] = useState<MonitoringRow["id"] | null>(null);
+
   // Keyboard navigation, matching ImageZoomDialog's existing behaviour.
   useEffect(() => {
     if (!open) return;
@@ -82,6 +101,7 @@ export function MonitoringMediaViewer({
 
   if (!row) return null;
   const verdict = verdictFor(row);
+  const playbackError = erroredId != null && erroredId === row.id;
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
@@ -113,7 +133,51 @@ export function MonitoringMediaViewer({
           <ChevronRightIcon />
         </IconButton>
 
-        {row.isVideo ? (
+        {row.isVideo && playbackError ? (
+          <Stack
+            spacing={1.5}
+            sx={{
+              width: "100%",
+              minHeight: 280,
+              alignItems: "center",
+              justifyContent: "center",
+              px: 3,
+              py: 6,
+              textAlign: "center",
+              // The poster still decodes even when the video does not, so it is
+              // used as a backdrop rather than leaving a black void.
+              ...(row.posterUrl
+                ? {
+                    backgroundImage: `linear-gradient(rgba(0,0,0,.72), rgba(0,0,0,.82)), url(${row.posterUrl})`,
+                    backgroundSize: "cover",
+                    backgroundPosition: "center",
+                  }
+                : {}),
+            }}
+          >
+            <VideocamOffRoundedIcon sx={{ fontSize: 40, color: "rgba(255,255,255,.6)" }} />
+            <Typography sx={{ color: "#fff", fontWeight: 700 }}>
+              This clip cannot be played in the browser
+            </Typography>
+            <Typography variant="body2" sx={{ color: "rgba(255,255,255,.72)", maxWidth: 460 }}>
+              It is recorded as MPEG-4 Part 2, a codec no browser supports. The recording
+              itself is intact — download it to view in VLC or QuickTime.
+            </Typography>
+            {row.mediaUrl ? (
+              <Button
+                variant="contained"
+                startIcon={<DownloadRoundedIcon />}
+                href={row.mediaUrl}
+                download
+                target="_blank"
+                rel="noopener noreferrer"
+                sx={{ mt: 0.5 }}
+              >
+                Download clip
+              </Button>
+            ) : null}
+          </Stack>
+        ) : row.isVideo ? (
           // Presigned S3 URLs honour HTTP range requests, so seeking works.
           <Box
             key={row.id}
@@ -123,6 +187,7 @@ export function MonitoringMediaViewer({
             controls
             autoPlay
             preload="metadata"
+            onError={() => setErroredId(row.id)}
             sx={{ width: "100%", maxHeight: "72vh", display: "block" }}
           />
         ) : (
