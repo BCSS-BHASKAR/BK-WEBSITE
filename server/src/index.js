@@ -19,7 +19,7 @@ const { walkingEnrollRouter, walkingEnrollMediaRouter } = require("./routes/walk
 const { chatAuditRouter } = require("./routes/chatAudit");
 const { challanRouter } = require("./routes/challan");
 const { startCameraAlertMonitor } = require("./lib/cameraAlertMonitor");
-const { inferenceRouter, inferencePosterRouter } = require("./routes/inference");
+const { inferenceRouter, inferencePosterRouter, inferenceClipRouter } = require("./routes/inference");
 const { settingsRouter } = require("./routes/settings");
 const { rbacRouter, ensureRbacSeed } = require("./routes/rbac");
 const { requirePageAccess } = require("./middleware/requirePageAccess");
@@ -57,6 +57,10 @@ app.use("/api/challan", requireAuth, challanRouter);
 // <img> tag cannot send an Authorization header. Mounted BEFORE the
 // authenticated inference router so requireAuth does not reject it.
 app.use("/api/inference/poster", inferencePosterRouter);
+// Transcoded clips, for the same reason: a <video> cannot send an Authorization
+// header either, so the HMAC on the URL is the access control. Also mounted
+// before the authenticated router.
+app.use("/api/inference/clip", inferenceClipRouter);
 // Inference viewer (S3 -> Postgres). Authenticated: the media it exposes
 // includes face crops and is treated as biometric data.
 app.use("/api/inference", requireAuth, requirePageAccess, inferenceRouter);

@@ -62,13 +62,12 @@ export function MonitoringMediaViewer({
   /**
    * Set when the browser refuses the clip.
    *
-   * The chef_absence recorder writes MPEG-4 Part 2 (Simple Profile) inside an
-   * MP4 container. No browser can decode that - Chrome reports
-   * canPlayType('video/mp4; codecs="mp4v.20.8"') as unsupported and fails with
-   * MEDIA_ERR_SRC_NOT_SUPPORTED - so the <video> rendered as a silent black
-   * rectangle with no indication of why. The evidence itself is fine, so rather
-   * than a dead player the viewer says what happened and offers the file, which
-   * plays in VLC or QuickTime.
+   * MP4 evidence is transcoded server-side before it reaches here, because the
+   * recorder writes MPEG-4 Part 2, which no browser decodes. This is the safety
+   * net for when that fails anyway - a transcode slot timing out, ffmpeg
+   * refusing a corrupt source - and it matters because the failure mode without
+   * it is a silent black rectangle with no indication of why. The original is
+   * always offered, and plays in VLC or QuickTime.
    *
    * Holding the failing row's id rather than a boolean is what lets the message
    * clear itself when the viewer steps to another detection - deriving it makes
@@ -102,6 +101,9 @@ export function MonitoringMediaViewer({
   if (!row) return null;
   const verdict = verdictFor(row);
   const playbackError = erroredId != null && erroredId === row.id;
+  // Prefer the untouched original: if playback failed, the transcode is the
+  // thing that is suspect, and this is evidence.
+  const downloadUrl = row.sourceUrl || row.mediaUrl;
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
@@ -160,14 +162,14 @@ export function MonitoringMediaViewer({
               This clip cannot be played in the browser
             </Typography>
             <Typography variant="body2" sx={{ color: "rgba(255,255,255,.72)", maxWidth: 460 }}>
-              It is recorded as MPEG-4 Part 2, a codec no browser supports. The recording
-              itself is intact — download it to view in VLC or QuickTime.
+              The recording itself is intact — the browser could not decode it. Download
+              it to view in VLC or QuickTime.
             </Typography>
-            {row.mediaUrl ? (
+            {downloadUrl ? (
               <Button
                 variant="contained"
                 startIcon={<DownloadRoundedIcon />}
-                href={row.mediaUrl}
+                href={downloadUrl}
                 download
                 target="_blank"
                 rel="noopener noreferrer"

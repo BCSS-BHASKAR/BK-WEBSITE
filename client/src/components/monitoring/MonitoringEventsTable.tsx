@@ -14,7 +14,10 @@ import type { InferenceModule } from "../../lib/inferenceModules";
 export type MonitoringRow = {
   id: number;
   camera_key: string | null;
+  /** Playable rendition. For MP4 evidence this is the server's transcode. */
   mediaUrl?: string;
+  /** Untouched original in S3, present only when mediaUrl is a transcode. */
+  sourceUrl?: string;
   posterUrl?: string;
   isVideo?: boolean;
   content_type?: string | null;

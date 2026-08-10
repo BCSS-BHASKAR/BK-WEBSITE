@@ -15,6 +15,9 @@ const { runIngest } = require("../lib/inferenceIngest");
 const {
   posterFile, hasPoster, ensurePoster, posterUrl, verifyPosterUrl, fetchBytesFor,
 } = require("../lib/inferencePosters");
+const {
+  needsTranscode, probeCodec, clipFile, hasClip, streamTranscode, clipUrl, verifyClipUrl,
+} = require("../lib/inferenceTranscodes");
 
 // Above this, a still is worth downscaling before it reaches a grid. The
 // walk-in crops are ~50 KB and are served as-is; the chef_absence intrusion
@@ -75,6 +78,15 @@ async function withMedia(rows) {
       if (r.s3_key) {
         out.mediaUrl = await presignGet(r.s3_key, { downloadName: r.s3_key.split("/").pop() });
         out.isVideo = String(r.content_type || "").startsWith("video");
+        // MP4s here are MPEG-4 Part 2, which no browser decodes, so the player
+        // is pointed at a transcoded rendition instead. sourceUrl keeps the
+        // untouched original one click away - it is the evidence of record, and
+        // the rendition is a downscaled re-encode of it.
+        if (out.isVideo && needsTranscode(r.content_type)) {
+          const assetIdForClip = r.asset_id != null ? r.asset_id : r.id;
+          out.sourceUrl = out.mediaUrl;
+          out.mediaUrl = clipUrl(assetIdForClip);
+        }
         // Posters are keyed by media_asset.id. Most rows here are SERVICE rows
         // (loitering_event.id etc.) whose id is unrelated to the asset id, so
         // keying on r.id would miss - or worse, silently return another clip's
@@ -545,6 +557,83 @@ posterRouter.get("/:assetId", async (req, res) => {
     stream.pipe(res);
   } catch (e) {
     console.error("inference poster", e);
+    if (!res.headersSent) res.status(500).end();
+  }
+});
+
+/**
+ * Browser-playable rendition of a clip the browser cannot decode.
+ *
+ * Mounted outside requireAuth for the same reason the poster route is: a
+ * <video> element cannot send an Authorization header, so the HMAC on the URL
+ * is the access control. It is scoped to one asset id and expires, and is no
+ * weaker than the S3 presigned URL the player was previously handed directly.
+ *
+ * A cached clip is served with range support so the scrubber works. A miss is
+ * transcoded straight into the response as fragmented mp4, which starts playing
+ * in about two seconds rather than after the ~35 s the full encode takes.
+ */
+const clipRouter = express.Router();
+clipRouter.get("/:assetId", async (req, res) => {
+  try {
+    const id = Number(req.params.assetId);
+    if (!Number.isFinite(id)) return res.status(400).end();
+    if (!verifyClipUrl(id, req.query.e, req.query.s)) return res.status(403).end();
+
+    // Cache hit: a plain file, so honour Range and let the player seek.
+    if (hasClip(id)) {
+      const file = clipFile(id);
+      const { size } = fs.statSync(file);
+      const range = /^bytes=(\d*)-(\d*)$/.exec(String(req.headers.range || ""));
+      res.set("Content-Type", "video/mp4");
+      res.set("Accept-Ranges", "bytes");
+      res.set("Cache-Control", "private, max-age=3600");
+      if (range) {
+        const start = range[1] ? Number(range[1]) : 0;
+        const end = range[2] ? Math.min(Number(range[2]), size - 1) : size - 1;
+        if (!(start <= end && start < size)) {
+          return res.status(416).set("Content-Range", `bytes */${size}`).end();
+        }
+        res.status(206);
+        res.set("Content-Range", `bytes ${start}-${end}/${size}`);
+        res.set("Content-Length", String(end - start + 1));
+        const stream = fs.createReadStream(file, { start, end });
+        stream.on("error", () => { if (!res.headersSent) res.status(404).end(); else res.destroy(); });
+        return stream.pipe(res);
+      }
+      res.set("Content-Length", String(size));
+      const stream = fs.createReadStream(file);
+      stream.on("error", () => { if (!res.headersSent) res.status(404).end(); else res.destroy(); });
+      return stream.pipe(res);
+    }
+
+    const [[asset]] = await pool.query(
+      `SELECT s3_key, content_type FROM media_asset WHERE id = ?`, [id]
+    );
+    if (!asset) return res.status(404).end();
+
+    const srcUrl = await presignGet(asset.s3_key);
+    const codec = await probeCodec(id, srcUrl);
+
+    // Fragmented mp4 has no length and cannot be seeked while it is being made.
+    // Saying so keeps the player from asking, and the next view is the cached
+    // file above, which can.
+    res.set("Content-Type", "video/mp4");
+    res.set("Accept-Ranges", "none");
+    res.set("Cache-Control", "no-store");
+    return streamTranscode({
+      assetId: id,
+      srcUrl,
+      codec,
+      res,
+      onError: (status, message) => {
+        console.warn(`[clip ${id}] ${message}`);
+        if (!res.headersSent) res.status(status).end();
+        else res.destroy();
+      },
+    });
+  } catch (e) {
+    console.error("inference clip", e);
     if (!res.headersSent) res.status(500).end();
   }
 });
@@ -1163,4 +1252,8 @@ router.post("/ingest", async (_req, res) => {
   }
 });
 
-module.exports = { inferenceRouter: router, inferencePosterRouter: posterRouter };
+module.exports = {
+  inferenceRouter: router,
+  inferencePosterRouter: posterRouter,
+  inferenceClipRouter: clipRouter,
+};
