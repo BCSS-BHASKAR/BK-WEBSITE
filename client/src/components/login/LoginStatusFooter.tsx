@@ -6,6 +6,7 @@ import FiberManualRecordIcon from "@mui/icons-material/FiberManualRecord";
 import CheckCircleOutlinedIcon from "@mui/icons-material/CheckCircleOutlined";
 import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
 import { SITE_BRANDING } from "../../i18n/lang";
+import { loginPalette } from "./loginTheme";
 
 // "ISO 27001 Certified" was removed — it is a claim about an external audit that
 // nothing here can back up. Restore it only if the certificate genuinely exists.
@@ -15,9 +16,9 @@ const COMPLIANCE = [
 ];
 
 const STATUS = [
-  { icon: <DescriptionOutlinedIcon sx={{ fontSize: 14 }} />, label: "Audit Logging: Enabled", color: "#94A3B8" },
-  { icon: <FiberManualRecordIcon sx={{ fontSize: 8 }} />, label: "Session Monitoring: Active", color: "#4ADE80", pulse: true },
-  { icon: <CheckCircleOutlinedIcon sx={{ fontSize: 14 }} />, label: "System Status: All Systems Operational", color: "#4ADE80" },
+  { icon: <DescriptionOutlinedIcon sx={{ fontSize: 14 }} />, label: "Audit Logging: Enabled", color: "rgba(240, 244, 232, 0.7)" },
+  { icon: <FiberManualRecordIcon sx={{ fontSize: 8 }} />, label: "Session Monitoring: Active", color: "#5FD87A", pulse: true },
+  { icon: <CheckCircleOutlinedIcon sx={{ fontSize: 14 }} />, label: "System Status: All Systems Operational", color: "#5FD87A" },
 ];
 
 function FooterIcon({ children }: { children: React.ReactNode }) {
@@ -29,9 +30,9 @@ function FooterIcon({ children }: { children: React.ReactNode }) {
         borderRadius: "50%",
         display: "grid",
         placeItems: "center",
-        bgcolor: "rgba(30, 41, 59, 0.8)",
-        border: "1px solid rgba(148, 163, 184, 0.2)",
-        color: "rgba(203, 213, 225, 0.95)",
+        bgcolor: "rgba(23, 60, 20, 0.85)",
+        border: `1px solid ${loginPalette.hairline}`,
+        color: loginPalette.creamMuted,
         flexShrink: 0,
       }}
     >
@@ -51,9 +52,9 @@ export function LoginStatusFooter() {
         gap: 2,
         px: { lg: 2.5, xl: 3 },
         py: 1.1,
-        bgcolor: "rgba(28, 5, 11, 0.96)",
-        borderTop: "1px solid rgba(217, 174, 69, 0.18)",
-        color: "rgba(226, 205, 175, 0.9)",
+        bgcolor: "rgba(8, 26, 8, 0.96)",
+        borderTop: `1px solid ${loginPalette.hairline}`,
+        color: loginPalette.creamMuted,
         flexShrink: 0,
       }}
     >
@@ -62,10 +63,10 @@ export function LoginStatusFooter() {
           <LockOutlinedIcon sx={{ fontSize: 14 }} />
         </FooterIcon>
         <Box>
-          <Typography sx={{ fontSize: "0.625rem", fontWeight: 700, lineHeight: 1.3, color: "#F5E8D6" }}>
+          <Typography sx={{ fontSize: "0.625rem", fontWeight: 700, lineHeight: 1.3, color: loginPalette.cream }}>
             Authorized Staff Only
           </Typography>
-          <Typography sx={{ fontSize: "0.5625rem", fontWeight: 500, color: "rgba(226,205,175,0.85)", lineHeight: 1.35 }}>
+          <Typography sx={{ fontSize: "0.5625rem", fontWeight: 500, color: loginPalette.creamFaint, lineHeight: 1.35 }}>
             {SITE_BRANDING.loginFooter.replace(/^Authorized (Personnel|Staff) Only\.?\s*/i, "")}
           </Typography>
         </Box>

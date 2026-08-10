@@ -37,6 +37,7 @@ import {
   loginFutureMuted,
   loginGlassCard,
   loginHeroBackground,
+  loginPalette,
 } from "./loginTheme";
 
 const SHOW_MFA_FIELD = false;
@@ -54,7 +55,7 @@ const fieldSx = {
     borderRadius: 1.5,
     "& fieldset": { borderColor: "rgba(148, 163, 184, 0.45)" },
     "&:hover fieldset": { borderColor: "#94A3B8" },
-    "&.Mui-focused fieldset": { borderColor: "#B8860B", borderWidth: 2 },
+    "&.Mui-focused fieldset": { borderColor: loginPalette.accent, borderWidth: 2 },
   },
 };
 
@@ -76,7 +77,7 @@ export function LoginSecureSignIn() {
     setBusy(true);
     try {
       await login(email.trim(), password);
-      const dest = loc.state?.from && loc.state.from !== "/login" ? loc.state.from : "/dashboard";
+      const dest = loc.state?.from && loc.state.from !== "/loginPalette" ? loc.state.from : "/dashboard";
       navigate(dest, { replace: true });
     } catch (e: unknown) {
       if (isAxiosError(e)) {
@@ -131,8 +132,8 @@ export function LoginSecureSignIn() {
               display: "grid",
               placeItems: "center",
               // Venue gold, not the old product's police blue.
-              background: "linear-gradient(145deg, #D9AE45 0%, #B8860B 100%)",
-              boxShadow: "0 0 32px rgba(217, 174, 69, 0.45), 0 10px 28px rgba(184, 134, 11, 0.35)",
+              background: `linear-gradient(145deg, ${loginPalette.goldBright} 0%, ${loginPalette.goldDeep} 100%)`,
+              boxShadow: "0 0 32px rgba(233, 199, 103, 0.45), 0 10px 28px rgba(185, 134, 28, 0.35)",
               color: "#fff",
               mb: 1.5,
             }}
@@ -144,7 +145,7 @@ export function LoginSecureSignIn() {
                 position: "absolute",
                 bottom: 10,
                 right: 10,
-                bgcolor: "#946A08",
+                bgcolor: loginPalette.goldDeep,
                 borderRadius: "50%",
                 p: 0.25,
               }}
@@ -155,7 +156,7 @@ export function LoginSecureSignIn() {
               fontWeight: 800,
               fontSize: "1.25rem",
               letterSpacing: "0.06em",
-              color: "#0F2744",
+              color: loginPalette.accentDeep,
               textTransform: "uppercase",
             }}
           >
@@ -295,12 +296,12 @@ export function LoginSecureSignIn() {
               letterSpacing: "0.08em",
               textTransform: "uppercase",
               borderRadius: 2,
-              bgcolor: "#0F2744",
-              backgroundImage: "linear-gradient(180deg, #5E1A2B 0%, #3B0E1B 100%)",
-              boxShadow: "0 10px 28px rgba(15, 39, 68, 0.5)",
+              bgcolor: loginPalette.accentDeep,
+              backgroundImage: `linear-gradient(180deg, ${loginPalette.accent} 0%, ${loginPalette.accentDeep} 100%)`,
+              boxShadow: "0 10px 28px rgba(11, 34, 10, 0.5)",
               "&:hover": {
-                bgcolor: "#0A1F38",
-                backgroundImage: "linear-gradient(180deg, #4A1220 0%, #2B0810 100%)",
+                bgcolor: "#0E2A12",
+                backgroundImage: `linear-gradient(180deg, ${loginPalette.accentMid} 0%, #0E2A12 100%)`,
               },
             }}
           >

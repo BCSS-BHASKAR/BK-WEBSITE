@@ -9,7 +9,7 @@ import VerifiedUserOutlinedIcon from "@mui/icons-material/VerifiedUserOutlined";
 import SmartToyOutlinedIcon from "@mui/icons-material/SmartToyOutlined";
 import ScheduleOutlinedIcon from "@mui/icons-material/ScheduleOutlined";
 import { SITE_BRANDING } from "../../i18n/lang";
-import { loginPanelBg } from "./loginTheme";
+import { loginPalette, loginPanelBg } from "./loginTheme";
 import { PnpBadge } from "../PnpBadge";
 
 /**
@@ -72,20 +72,20 @@ function ModuleRow({ icon, title, body }: { icon: React.ReactNode; title: string
           flexShrink: 0,
           display: "grid",
           placeItems: "center",
-          bgcolor: "rgba(217, 174, 69, 0.12)",
-          border: "1px solid rgba(217, 174, 69, 0.26)",
-          color: "#F2D68A",
+          bgcolor: loginPalette.tint,
+          border: `1px solid ${loginPalette.hairline}`,
+          color: loginPalette.goldBright,
           "& svg": { fontSize: 20 },
         }}
       >
         {icon}
       </Box>
       <Box sx={{ minWidth: 0, pt: 0.15 }}>
-        <Typography sx={{ fontWeight: 700, fontSize: "0.875rem", color: "#F8FAFC", lineHeight: 1.3 }}>
+        <Typography sx={{ fontWeight: 700, fontSize: "0.875rem", color: loginPalette.cream, lineHeight: 1.3 }}>
           {title}
         </Typography>
         <Typography
-          sx={{ mt: 0.3, fontSize: "0.75rem", color: "rgba(226, 205, 175, 0.82)", lineHeight: 1.5 }}
+          sx={{ mt: 0.3, fontSize: "0.75rem", color: loginPalette.creamMuted, lineHeight: 1.5 }}
         >
           {body}
         </Typography>
@@ -103,7 +103,7 @@ export function LoginOperationalDashboard() {
         justifyContent: "center",
         minHeight: "100%",
         background: loginPanelBg,
-        color: "#F8FAFC",
+        color: loginPalette.cream,
         overflow: "hidden",
         position: "relative",
         px: { lg: 5, xl: 8 },
@@ -133,7 +133,7 @@ export function LoginOperationalDashboard() {
                 fontStyle: "italic",
                 fontSize: { lg: "1rem", xl: "1.0625rem" },
                 letterSpacing: "0.015em",
-                color: "rgba(242, 214, 138, 0.95)",
+                color: loginPalette.gold,
                 mt: 0.6,
                 lineHeight: 1.35,
               }}
@@ -147,7 +147,7 @@ export function LoginOperationalDashboard() {
           sx={{
             mt: 3,
             fontSize: { lg: "0.9375rem", xl: "1rem" },
-            color: "rgba(245, 232, 214, 0.9)",
+            color: loginPalette.creamMuted,
             lineHeight: 1.65,
             maxWidth: 560,
           }}
@@ -180,9 +180,9 @@ export function LoginOperationalDashboard() {
                 px: 1.25,
                 py: 0.55,
                 borderRadius: 10,
-                bgcolor: "rgba(28, 5, 11, 0.55)",
-                border: "1px solid rgba(217, 174, 69, 0.22)",
-                color: "rgba(242, 214, 138, 0.92)",
+                bgcolor: "rgba(11, 34, 10, 0.55)",
+                border: `1px solid ${loginPalette.hairline}`,
+                color: loginPalette.gold,
               }}
             >
               {b.icon}
