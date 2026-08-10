@@ -36,7 +36,9 @@ import { AppMasthead } from "./AppMasthead";
 import { SITE_BRANDING, SITE_LABELS } from "../i18n/lang";
 import { PoweredByBcss } from "./PoweredByBcss";
 import { PnpBadge } from "./PnpBadge";
-import { pnp, pnpNavItemSx, pnpSidebarBg } from "../lib/pnpTheme";
+import { pnp } from "../lib/pnpTheme";
+import { rail, railNavItemSx, railSidebarBg } from "../lib/railTheme";
+import { SidebarBiryaniArt } from "./SidebarBiryaniArt";
 import { ui } from "../lib/uiSurfaces";
 import { AppFooter } from "./AppFooter";
 import CheckCircleOutlinedIcon from "@mui/icons-material/CheckCircleOutlined";
@@ -139,7 +141,7 @@ function isNavActive(path: string | null, pathname: string) {
 
 function navItemSx(selected: boolean, sidebarExpanded: boolean) {
   return {
-    ...pnpNavItemSx(selected),
+    ...railNavItemSx(selected),
     justifyContent: sidebarExpanded ? ("flex-start" as const) : ("center" as const),
     px: sidebarExpanded ? 1.5 : 1.25,
     py: sidebarExpanded ? 0.65 : 0.5,
@@ -246,7 +248,7 @@ function AppShellInner() {
               ? {
                   opacity: 0.45,
                   cursor: "default",
-                  "&.Mui-disabled": { opacity: 0.45, color: pnp.navText },
+                  "&.Mui-disabled": { opacity: 0.45, color: rail.text },
                 }
               : {}),
           }}
@@ -255,7 +257,9 @@ function AppShellInner() {
             sx={{
               minWidth: sidebarExpanded ? 40 : 0,
               justifyContent: "center",
-              color: selected ? "#FFFFFF" : "rgba(248,250,252,0.75)",
+              // Gold on the active row, cream elsewhere - the design does not
+              // turn the active icon white with its label.
+              color: selected ? rail.activeIcon : rail.icon,
               "& .MuiSvgIcon-root": { fontSize: 22 },
             }}
           >
@@ -267,9 +271,9 @@ function AppShellInner() {
                 <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, minWidth: 0 }}>
                   <Typography
                     sx={{
-                      fontWeight: selected ? 600 : 500,
+                      fontWeight: selected ? 700 : 500,
                       fontSize: "0.875rem",
-                      color: selected ? "#FFFFFF" : "rgba(248,250,252,0.9)",
+                      color: selected ? rail.activeText : rail.text,
                     }}
                     noWrap
                   >
@@ -304,7 +308,7 @@ function AppShellInner() {
             sx={{
               px: 2, pt: 1.5, pb: 0.5, fontSize: 10, fontWeight: 800,
               letterSpacing: "0.09em", textTransform: "uppercase",
-              color: "rgba(248,250,252,0.45)",
+              color: rail.caption,
             }}
           >
             {n.group}
@@ -361,9 +365,14 @@ function AppShellInner() {
   const drawerPaperSx = {
     width: drawerWidth,
     boxSizing: "border-box" as const,
-    borderRight: "1px solid rgba(255,255,255,0.08)",
-    color: "#F8FAFC",
-    bgcolor: pnpSidebarBg,
+    borderRight: `1px solid ${rail.border}`,
+    color: rail.cream,
+    // bgcolor is the fallback the gradient paints over - a Drawer paper is a
+    // MuiPaper, and the theme override sets backgroundColor on it, so the
+    // gradient alone would leave the maroon showing through on any browser that
+    // drops background-image.
+    bgcolor: railSidebarBg,
+    backgroundImage: rail.bg,
     overflowX: "hidden" as const,
     overflowY: "auto" as const,
     scrollbarWidth: "none" as const,
@@ -388,7 +397,17 @@ function AppShellInner() {
       }}
     >
       {sidebarExpanded ? (
-        <Box sx={{ px: 0.5, mb: 1, textAlign: "center", overflow: "visible" }}>
+        <Box
+          sx={{
+            px: 0.5,
+            mb: 1.25,
+            pb: 1.25,
+            textAlign: "center",
+            overflow: "visible",
+            // Hairline under the brand block, as the design has.
+            borderBottom: `1px solid ${rail.divider}`,
+          }}
+        >
           {/* The badge artwork already carries the wordmark, so only the console
               label is repeated here. */}
           <PnpBadge size={80} sx={{ mx: "auto" }} />
@@ -399,7 +418,7 @@ function AppShellInner() {
               fontWeight: 700,
               letterSpacing: "0.16em",
               textTransform: "uppercase",
-              color: "rgba(242, 214, 138, 0.92)",
+              color: rail.gold,
             }}
           >
           </Typography>
@@ -452,7 +471,24 @@ function AppShellInner() {
         </>
       ) : null}
 
-      <Box sx={{ mt: "auto", pt: 1, borderTop: "1px solid rgba(255,255,255,0.1)", display: "flex", justifyContent: "center" }}>
+      {/* Decorative close to the rail. Expanded only - the 140px collapsed rail
+          has no width to give it, and it carries no information, so dropping it
+          there costs nothing. */}
+      {sidebarExpanded ? (
+        <Box sx={{ mt: "auto", pt: 2, px: 0.5 }}>
+          <SidebarBiryaniArt />
+        </Box>
+      ) : null}
+
+      <Box
+        sx={{
+          mt: sidebarExpanded ? 0 : "auto",
+          pt: 1,
+          borderTop: `1px solid ${rail.divider}`,
+          display: "flex",
+          justifyContent: "center",
+        }}
+      >
         <PoweredByBcss variant={sidebarExpanded ? "sidebar" : "sidebarCollapsed"} />
       </Box>
     </Box>
