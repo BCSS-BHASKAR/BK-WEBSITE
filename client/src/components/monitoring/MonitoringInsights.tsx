@@ -162,7 +162,7 @@ export function MonitoringInsights({
                 {i.icon}
               </Box>
               <Box sx={{ minWidth: 0 }}>
-                <Typography sx={{ fontWeight: 800, fontSize: "0.9375rem", color: i.colour, lineHeight: 1.3 }}>
+                <Typography sx={{ fontWeight: 800, fontSize: "0.9375rem", color: i.colour, lineHeight: 1.3, overflowWrap: "anywhere" }}>
                   {i.headline}
                 </Typography>
                 <Typography variant="caption" color="text.secondary" sx={{ display: "block", lineHeight: 1.45 }}>

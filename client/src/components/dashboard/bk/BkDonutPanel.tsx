@@ -39,7 +39,7 @@ export function BkDonutPanel({
     <Box sx={{ ...bkCardSx, p: 2, display: "flex", flexDirection: "column" }}>
       <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1.5 }}>
         {icon}
-        <Typography sx={bkPanelTitleSx} noWrap>{title}</Typography>
+        <Typography sx={bkPanelTitleSx}>{title}</Typography>
       </Box>
 
       {total > 0 ? (
@@ -126,7 +126,7 @@ export function BkDonutPanel({
                       aria-hidden
                       sx={{ width: 9, height: 9, borderRadius: "50%", bgcolor: s.colour, flexShrink: 0 }}
                     />
-                    <Typography sx={{ fontSize: "0.8125rem", fontWeight: 600, color: bk.ink }} noWrap>
+                    <Typography sx={{ fontSize: "0.8125rem", fontWeight: 600, color: bk.ink, overflowWrap: "anywhere" }}>
                       {s.name}
                     </Typography>
                   </Box>

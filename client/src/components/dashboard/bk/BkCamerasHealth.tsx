@@ -28,10 +28,10 @@ function StatusItem({ icon, label, value, pct, colour }: {
         {icon}
       </Box>
       <Box sx={{ minWidth: 0 }}>
-        <Typography sx={{ fontSize: "0.75rem", fontWeight: 600, color: bk.muted, lineHeight: 1.3 }} noWrap>
+        <Typography sx={{ fontSize: "0.75rem", fontWeight: 600, color: bk.muted, lineHeight: 1.3 }}>
           {label}
         </Typography>
-        <Typography sx={{ fontSize: "0.8125rem", fontWeight: 700, color: bk.ink, lineHeight: 1.35 }} noWrap>
+        <Typography sx={{ fontSize: "0.8125rem", fontWeight: 700, color: bk.ink, lineHeight: 1.35 }}>
           {value}{" "}
           <Box component="span" sx={{ fontWeight: 500, color: bk.muted }}>({pct}%)</Box>
         </Typography>
@@ -107,7 +107,7 @@ export function BkCamerasHealth({ online, offline, unreachable, recording, stora
             </Box>
           </Box>
         </Box>
-        <Typography sx={{ fontSize: "0.9375rem", fontWeight: 700, color: bk.ink, letterSpacing: "-0.01em" }} noWrap>
+        <Typography sx={{ fontSize: "0.9375rem", fontWeight: 700, color: bk.ink, letterSpacing: "-0.01em" }}>
           Cameras Health Overview
         </Typography>
       </Box>
@@ -129,15 +129,15 @@ export function BkCamerasHealth({ online, offline, unreachable, recording, stora
         <Box sx={dividerSx} />
 
         <Box sx={{ minWidth: 0 }}>
-          <Typography sx={{ fontSize: "0.75rem", fontWeight: 600, color: bk.muted, lineHeight: 1.3 }} noWrap>
+          <Typography sx={{ fontSize: "0.75rem", fontWeight: 600, color: bk.muted, lineHeight: 1.3 }}>
             Recording Status
           </Typography>
-          <Typography sx={{ fontSize: "0.9375rem", fontWeight: 800, color: bk.ink, lineHeight: 1.3 }} noWrap>
+          <Typography sx={{ fontSize: "0.9375rem", fontWeight: 800, color: bk.ink, lineHeight: 1.3 }}>
             {recording} / {total}
           </Typography>
           <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
             <Box sx={{ width: 7, height: 7, borderRadius: "50%", bgcolor: recording > 0 ? bk.green : bk.faint }} />
-            <Typography sx={{ fontSize: "0.6875rem", fontWeight: 600, color: bk.muted }} noWrap>
+            <Typography sx={{ fontSize: "0.6875rem", fontWeight: 600, color: bk.muted }}>
               {recording > 0 ? "Recording" : "Not recording"}
             </Typography>
           </Box>
@@ -146,10 +146,10 @@ export function BkCamerasHealth({ online, offline, unreachable, recording, stora
         <Box sx={dividerSx} />
 
         <Box sx={{ minWidth: 140 }}>
-          <Typography sx={{ fontSize: "0.75rem", fontWeight: 600, color: bk.muted, lineHeight: 1.3 }} noWrap>
+          <Typography sx={{ fontSize: "0.75rem", fontWeight: 600, color: bk.muted, lineHeight: 1.3 }}>
             Storage Usage (Avg.)
           </Typography>
-          <Typography sx={{ fontSize: "0.9375rem", fontWeight: 800, color: bk.ink, lineHeight: 1.3 }} noWrap>
+          <Typography sx={{ fontSize: "0.9375rem", fontWeight: 800, color: bk.ink, lineHeight: 1.3 }}>
             {storagePct == null ? "—" : `${storagePct}%`}
           </Typography>
           <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: 0.375 }}>
@@ -172,7 +172,7 @@ export function BkCamerasHealth({ online, offline, unreachable, recording, stora
                 }}
               />
             </Box>
-            <Typography sx={{ fontSize: "0.6875rem", fontWeight: 600, color: bk.muted }} noWrap>
+            <Typography sx={{ fontSize: "0.6875rem", fontWeight: 600, color: bk.muted }}>
               {storagePct == null ? "Not reported" : storagePct >= 85 ? "Critical" : storagePct >= 70 ? "High" : "Normal"}
             </Typography>
           </Box>

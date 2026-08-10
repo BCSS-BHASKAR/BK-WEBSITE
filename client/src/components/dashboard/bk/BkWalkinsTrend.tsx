@@ -104,7 +104,7 @@ export function BkWalkinsTrend({ grain, onGrainChange, points, xTickInterval, lo
       <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1, mb: 1.5 }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1, minWidth: 0 }}>
           <BarChartRounded sx={{ fontSize: 20, color: bk.green }} />
-          <Typography sx={bkPanelTitleSx} noWrap>Walk-ins Trend</Typography>
+          <Typography sx={bkPanelTitleSx}>Walk-ins Trend</Typography>
         </Box>
 
         {/* Segmented control: one track, the active segment filled deep green. */}

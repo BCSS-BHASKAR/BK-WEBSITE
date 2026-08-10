@@ -31,7 +31,7 @@ export function BkIntruderPanel({ rows, loading, onViewAll, onOpen }: Props) {
     <Box sx={{ ...bkCardSx, p: 2, display: "flex", flexDirection: "column" }}>
       <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1.5 }}>
         <DetectiveHatIcon sx={{ fontSize: 20, color: bk.red }} />
-        <Typography sx={bkPanelTitleSx} noWrap>Intruder Detection</Typography>
+        <Typography sx={bkPanelTitleSx}>Intruder Detection</Typography>
       </Box>
 
       <Box sx={{ flex: 1, display: "flex", flexDirection: "column", gap: 1.25 }}>
@@ -90,11 +90,11 @@ export function BkIntruderPanel({ rows, loading, onViewAll, onOpen }: Props) {
               <Box sx={{ minWidth: 0, flex: 1 }}>
                 <Box sx={{ display: "flex", alignItems: "center", gap: 0.625, minWidth: 0 }}>
                   <DetectiveHatIcon sx={{ fontSize: 15, color: bk.red, flexShrink: 0 }} />
-                  <Typography sx={{ fontSize: "0.8125rem", fontWeight: 700, color: bk.ink }} noWrap>
+                  <Typography sx={{ fontSize: "0.8125rem", fontWeight: 700, color: bk.ink, overflowWrap: "anywhere" }}>
                     {r.area}
                   </Typography>
                 </Box>
-                <Typography sx={{ fontSize: "0.71875rem", fontWeight: 500, color: bk.muted, mt: 0.15 }} noWrap>
+                <Typography sx={{ fontSize: "0.71875rem", fontWeight: 500, color: bk.muted, mt: 0.15 }}>
                   {r.when}
                 </Typography>
               </Box>

@@ -54,10 +54,10 @@ export function BkValueProps() {
             {it.icon}
           </Box>
           <Box sx={{ minWidth: 0 }}>
-            <Typography sx={{ fontSize: "0.8125rem", fontWeight: 700, color: bk.ink, lineHeight: 1.35 }} noWrap>
+            <Typography sx={{ fontSize: "0.8125rem", fontWeight: 700, color: bk.ink, lineHeight: 1.35 }}>
               {it.title}
             </Typography>
-            <Typography sx={{ fontSize: "0.71875rem", fontWeight: 500, color: bk.muted, lineHeight: 1.4 }} noWrap>
+            <Typography sx={{ fontSize: "0.71875rem", fontWeight: 500, color: bk.muted, lineHeight: 1.4 }}>
               {it.blurb}
             </Typography>
           </Box>

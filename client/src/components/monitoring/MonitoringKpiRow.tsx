@@ -190,19 +190,19 @@ export function MonitoringKpiRow({
             </Box>
 
             <Box sx={{ minWidth: 0, flex: 1 }}>
-              <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>
+              <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
                 {t.label}
               </Typography>
               {loading ? (
                 <Skeleton width="60%" height={32} />
               ) : (
-                <Typography sx={{ fontWeight: 800, fontSize: 26, lineHeight: 1.2 }} noWrap>
+                <Typography sx={{ fontWeight: 800, fontSize: 26, lineHeight: 1.2 }}>
                   {typeof t.value === "number" ? t.value.toLocaleString() : t.value}
                 </Typography>
               )}
               {!loading && t.delta ? <KpiDelta delta={t.delta} /> : null}
               {!loading && !t.delta && t.hint ? (
-                <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>
+                <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
                   {t.hint}
                 </Typography>
               ) : null}

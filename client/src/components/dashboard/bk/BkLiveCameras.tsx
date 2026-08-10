@@ -82,7 +82,7 @@ export function BkLiveCameras({ tiles, loading, onOpen }: Props) {
             flexShrink: 0,
           }}
         />
-        <Typography sx={bkPanelTitleSx} noWrap>Live Camera Overview</Typography>
+        <Typography sx={bkPanelTitleSx}>Live Camera Overview</Typography>
       </Box>
 
       <Box

@@ -72,7 +72,7 @@ function TileShell({ label, icon, tint, iconColour, onClick, children }: BaseTil
         {icon}
       </Box>
       <Box sx={{ minWidth: 0, flex: 1 }}>
-        <Typography sx={{ fontSize: "0.8125rem", fontWeight: 600, color: bk.muted, lineHeight: 1.35 }} noWrap>
+        <Typography sx={{ fontSize: "0.8125rem", fontWeight: 600, color: bk.muted, lineHeight: 1.35 }}>
           {label}
         </Typography>
         {children}
@@ -84,7 +84,7 @@ function TileShell({ label, icon, tint, iconColour, onClick, children }: BaseTil
 function DeltaLine({ delta }: { delta: Delta }) {
   if (delta.pct == null) {
     return (
-      <Typography sx={{ mt: 0.35, fontSize: "0.75rem", fontWeight: 600, color: bk.faint }} noWrap>
+      <Typography sx={{ mt: 0.35, fontSize: "0.75rem", fontWeight: 600, color: bk.faint }}>
         {delta.label}
       </Typography>
     );
@@ -96,7 +96,6 @@ function DeltaLine({ delta }: { delta: Delta }) {
       <Arrow sx={{ fontSize: 14, color: rising ? bk.up : bk.down }} />
       <Typography
         sx={{ fontSize: "0.75rem", fontWeight: 700, color: rising ? bk.up : bk.down, lineHeight: 1.3 }}
-        noWrap
       >
         {Math.abs(delta.pct)}% {delta.label}
       </Typography>
@@ -177,13 +176,13 @@ export function BkKpiRow(p: BkKpiRowProps) {
         iconColour={bk.purple}
         onClick={p.onChef}
       >
-        <Typography sx={{ ...valueSx, fontSize: "1.0625rem", mt: 0.15 }} noWrap>
+        <Typography sx={{ ...valueSx, fontSize: "1.0625rem", mt: 0.15 }}>
           Chef: {p.chef.toLocaleString()}
         </Typography>
-        <Typography sx={{ ...valueSx, fontSize: "1.0625rem" }} noWrap>
+        <Typography sx={{ ...valueSx, fontSize: "1.0625rem" }}>
           Non-Chef: {p.nonChef.toLocaleString()}
         </Typography>
-        <Typography sx={{ mt: 0.25, fontSize: "0.75rem", fontWeight: 600, color: bk.muted }} noWrap>
+        <Typography sx={{ mt: 0.25, fontSize: "0.75rem", fontWeight: 600, color: bk.muted }}>
           Total in Kitchen: {kitchenTotal.toLocaleString()}
         </Typography>
       </TileShell>

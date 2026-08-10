@@ -88,7 +88,7 @@ export function MonitoringHeader({
       </Box>
 
       <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexShrink: 0 }}>
-        <Typography variant="caption" color="text.secondary" noWrap>
+        <Typography variant="caption" color="text.secondary">
           Last updated: {fmtUpdated(updatedAt)}
         </Typography>
         <Button

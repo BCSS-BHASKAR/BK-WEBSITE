@@ -27,7 +27,7 @@ export function KpiDelta({ delta, size = "sm" }: { delta: RangeDelta; size?: "sm
 
   if (delta.pct == null) {
     return (
-      <Typography sx={{ fontSize, fontWeight: 600, color: FLAT, lineHeight: 1.35 }} noWrap>
+      <Typography sx={{ fontSize, fontWeight: 600, color: FLAT, lineHeight: 1.35 }}>
         {delta.label}
       </Typography>
     );
@@ -42,7 +42,7 @@ export function KpiDelta({ delta, size = "sm" }: { delta: RangeDelta; size?: "sm
   return (
     <Box sx={{ display: "flex", alignItems: "center", gap: 0.25, minWidth: 0 }}>
       <Arrow sx={{ fontSize: size === "md" ? 15 : 13, color: colour, flexShrink: 0 }} />
-      <Typography sx={{ fontSize, fontWeight: 700, color: colour, lineHeight: 1.35 }} noWrap>
+      <Typography sx={{ fontSize, fontWeight: 700, color: colour, lineHeight: 1.35 }}>
         {Math.abs(delta.pct)}%{" "}
         <Box component="span" sx={{ fontWeight: 500, color: FLAT }}>
           {delta.label}
