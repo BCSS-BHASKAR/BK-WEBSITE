@@ -7,6 +7,8 @@ import { pageLayoutSx } from "../lib/uiSurfaces";
 import { moduleByRouteSlug } from "../lib/inferenceModules";
 import { MonitoringKpiRow, type ModuleKpis } from "../components/monitoring/MonitoringKpiRow";
 import { MonitoringAnalytics, type ModuleAnalytics } from "../components/monitoring/MonitoringAnalytics";
+import { MonitoringHeader } from "../components/monitoring/MonitoringHeader";
+import { MonitoringInsights } from "../components/monitoring/MonitoringInsights";
 import {
   MonitoringEventsTable, type FeedbackVerdict, type MonitoringRow,
 } from "../components/monitoring/MonitoringEventsTable";
@@ -200,15 +202,23 @@ export function MonitoringPage() {
   return (
     <RequirePage page={pageKey} label={`${mod.label} Monitoring`}>
     <Box sx={pageLayoutSx}>
-      <Box>
-        <Typography variant="h5" sx={{ fontWeight: 800 }}>{mod.label} Monitoring</Typography>
-        <Typography variant="body2" color="text.secondary">{mod.blurb}</Typography>
-      </Box>
+      <MonitoringHeader
+        module={mod}
+        updatedAt={kpisQ.dataUpdatedAt}
+        refreshing={kpisQ.isFetching || analyticsQ.isFetching || rowsQ.isFetching}
+        onRefresh={() => {
+          // Everything on the page is scoped to the same filters, so a refresh
+          // that moved only some of them would leave the tiles disagreeing with
+          // the table.
+          qc.invalidateQueries({ queryKey: ["monitoring", key] });
+        }}
+      />
 
       <MonitoringKpiRow
         module={mod}
         kpis={kpisQ.data}
         previousKpis={prevKpisQ.data}
+        dailySeries={analyticsQ.data?.byDay}
         from={filters.from}
         to={filters.to}
         loading={kpisQ.isLoading}
@@ -224,7 +234,24 @@ export function MonitoringPage() {
         onExport={onExport}
       />
 
-      <MonitoringAnalytics module={mod} data={analyticsQ.data} loading={analyticsQ.isLoading} />
+      {/* Charts and the derived readings of them sit side by side, so the
+          conclusions are next to the evidence rather than under it. */}
+      <Box
+        sx={{
+          display: "grid",
+          gridTemplateColumns: { xs: "minmax(0, 1fr)", xl: "minmax(0, 1fr) 300px" },
+          gap: 1.5,
+          alignItems: "stretch",
+        }}
+      >
+        <MonitoringAnalytics module={mod} data={analyticsQ.data} loading={analyticsQ.isLoading} />
+        <MonitoringInsights
+          module={mod}
+          data={analyticsQ.data}
+          kpis={kpisQ.data}
+          loading={analyticsQ.isLoading}
+        />
+      </Box>
 
       <Box id="monitoring-events">
         <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", mb: 1 }}>

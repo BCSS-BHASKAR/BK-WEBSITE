@@ -52,3 +52,18 @@ export const thumbSx: SxProps<Theme> = {
 
 /** Filter control width, matching the report pages' copy-pasted filterFieldSx. */
 export const filterFieldSx = { width: { xs: "100%", sm: 176 } } as const;
+
+/**
+ * A module hue at low opacity, for the soft plate behind an icon.
+ *
+ * The registry stores hues as 6-digit hex, so an 8-digit alpha suffix is the
+ * cheapest way to tint one without pulling in a colour library. Anything that is
+ * not a plain #rrggbb is handed back untouched rather than silently mangled.
+ */
+export function tintOf(hex: string, alpha = 0.12): string {
+  if (!/^#[0-9a-f]{6}$/i.test(hex)) return hex;
+  const a = Math.round(Math.min(1, Math.max(0, alpha)) * 255)
+    .toString(16)
+    .padStart(2, "0");
+  return `${hex}${a}`;
+}

@@ -1,8 +1,8 @@
 import { useMemo } from "react";
 import { Box, Grid, Paper, Skeleton, Stack, Tooltip, Typography } from "@mui/material";
 import {
-  Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer,
-  Tooltip as RTooltip, XAxis, YAxis,
+  Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, LabelList, Pie, PieChart,
+  ResponsiveContainer, Tooltip as RTooltip, XAxis, YAxis,
 } from "recharts";
 import { contentCardSx } from "../../lib/uiSurfaces";
 import type { InferenceModule } from "../../lib/inferenceModules";
@@ -11,6 +11,16 @@ import type { InferenceModule } from "../../lib/inferenceModules";
 const INK = "rgba(0,0,0,.45)";
 const GRID = "rgba(0,0,0,.08)";
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+/**
+ * Donut slice hues.
+ *
+ * A donut is an ALL-PAIRS form - the reader compares arcs that do not touch -
+ * which is a harder separation gate than the adjacent-pair one a bar chart has
+ * to clear. This set is validated for that on a light surface; it is not the
+ * module palette, whose hues are chosen to sit beside each other, not apart.
+ */
+const SLICE_HUES = ["#eb6834", "#2a78d6", "#1baf7a", "#7E3F5B", "#eda100", "#4a3aa7"];
 
 export type ModuleAnalytics = {
   byDay: { day: string; n: number }[];
@@ -75,6 +85,7 @@ export function MonitoringAnalytics({
     () => (data?.byCamera || []).slice().sort((a, b) => Number(b.n) - Number(a.n)),
     [data]
   );
+  const cameraTotal = useMemo(() => cameras.reduce((a, c) => a + Number(c.n), 0), [cameras]);
 
   if (loading) {
     return (
@@ -105,7 +116,15 @@ export function MonitoringAnalytics({
               <YAxis allowDecimals={false} width={32} tick={{ fontSize: 10, fill: INK }} axisLine={false} tickLine={false} tickMargin={4} />
               <RTooltip formatter={(v) => [Number(v ?? 0), module.label] as [number, string]}
                         contentStyle={{ fontSize: 12, borderRadius: 8 }} />
-              <Area type="monotone" dataKey="n" stroke={hue} strokeWidth={2} fill={`url(#ga-${module.key})`} dot={false} activeDot={{ r: 4 }} />
+              <Area type="monotone" dataKey="n" stroke={hue} strokeWidth={2.5} fill={`url(#ga-${module.key})`}
+                    dot={{ r: 3, fill: hue, stroke: "#fff", strokeWidth: 1.5 }} activeDot={{ r: 5 }}>
+                {/* The design labels every point. It is only readable because
+                    these panels plot a handful of days - Recharts will collide
+                    labels rather than thin them, so this stays off the 24-bar
+                    hourly chart at narrow widths. */}
+                <LabelList dataKey="n" position="top" offset={8}
+                           style={{ fontSize: 10, fontWeight: 700, fill: INK }} />
+              </Area>
             </AreaChart>
           </ResponsiveContainer>
         </Panel>
@@ -123,7 +142,11 @@ export function MonitoringAnalytics({
                         labelFormatter={(h) => `${String(h).padStart(2, "0")}:00`}
                         formatter={(v) => [Number(v ?? 0), "events"] as [number, string]}
                         contentStyle={{ fontSize: 12, borderRadius: 8 }} />
-              <Bar dataKey="n" fill={hue} radius={[4, 4, 0, 0]} maxBarSize={16} />
+              <Bar dataKey="n" fill={hue} radius={[4, 4, 0, 0]} maxBarSize={16}>
+                <LabelList dataKey="n" position="top" offset={4}
+                           formatter={(v) => (Number(v) > 0 ? String(v) : "")}
+                           style={{ fontSize: 9, fontWeight: 700, fill: INK }} />
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </Panel>
@@ -139,37 +162,81 @@ export function MonitoringAnalytics({
               <RTooltip cursor={{ fill: "rgba(0,0,0,.04)" }}
                         formatter={(v) => [Number(v ?? 0), "events"] as [number, string]}
                         contentStyle={{ fontSize: 12, borderRadius: 8 }} />
-              <Bar dataKey="n" fill={hue} radius={[4, 4, 0, 0]} maxBarSize={26} />
+              <Bar dataKey="n" fill={hue} radius={[4, 4, 0, 0]} maxBarSize={26}>
+                <LabelList dataKey="n" position="top" offset={4}
+                           formatter={(v) => (Number(v) > 0 ? String(v) : "")}
+                           style={{ fontSize: 10, fontWeight: 700, fill: INK }} />
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </Panel>
       </Grid>
 
       <Grid size={{ xs: 12, md: 6 }}>
-        <Panel title="Detections by camera" subtitle="Share of events recorded by each camera" height={180}>
-          <Box sx={{ height: "100%", overflowY: "auto", pr: 0.5 }}>
-            {cameras.length === 0 && (
-              <Typography variant="body2" color="text.secondary">No camera recorded an event in this range.</Typography>
-            )}
-            {cameras.map((c) => {
-              const pct = Math.max(2, (Number(c.n) / Number(cameras[0].n || 1)) * 100);
-              return (
-                <Box key={c.camera_key} sx={{ mb: 1 }}>
-                  <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center" }}>
-                    <Tooltip title={c.camera_key}>
-                      <Typography variant="body2" noWrap sx={{ fontWeight: 600, maxWidth: "70%" }}>
-                        {c.camera_key.trim()}
+        <Panel title="Detections by camera" subtitle="Share of events recorded by each camera" height={200}>
+          {cameras.length === 0 ? (
+            <Typography variant="body2" color="text.secondary">
+              No camera recorded an event in this range.
+            </Typography>
+          ) : (
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={2} sx={{ alignItems: "center", height: "100%" }}>
+              <Box sx={{ width: 168, height: 168, flexShrink: 0, position: "relative" }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={cameras} dataKey="n" nameKey="camera_key"
+                      innerRadius="52%" outerRadius="98%"
+                      startAngle={90} endAngle={-270}
+                      paddingAngle={1} stroke="#fff" strokeWidth={2}
+                      isAnimationActive={false}
+                    >
+                      {cameras.map((c, i) => (
+                        <Cell key={c.camera_key} fill={SLICE_HUES[i % SLICE_HUES.length]} />
+                      ))}
+                    </Pie>
+                    <RTooltip
+                      formatter={(v, n) => [`${Number(v ?? 0)} events`, String(n)] as [string, string]}
+                      contentStyle={{ fontSize: 12, borderRadius: 8 }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </Box>
+
+              {/* The legend carries the exact counts. Several slice hues sit
+                  under 3:1 against a white card, so identity never rests on
+                  colour alone - the name and number beside each swatch are what
+                  make the chart readable in greyscale and to a colour-blind
+                  reader. */}
+              <Box sx={{ flex: 1, minWidth: 0, width: "100%" }}>
+                {cameras.map((c, i) => {
+                  const pct = cameraTotal ? Math.round((Number(c.n) / cameraTotal) * 1000) / 10 : 0;
+                  return (
+                    <Stack key={c.camera_key} direction="row"
+                           sx={{ alignItems: "center", gap: 1, mb: 0.85, minWidth: 0 }}>
+                      <Box sx={{ width: 10, height: 10, borderRadius: "50%", flexShrink: 0,
+                                 bgcolor: SLICE_HUES[i % SLICE_HUES.length] }} />
+                      <Tooltip title={c.camera_key}>
+                        <Typography variant="body2" noWrap sx={{ fontWeight: 600, flex: 1, minWidth: 0 }}>
+                          {(c.camera_key || "—").trim()}
+                        </Typography>
+                      </Tooltip>
+                      <Typography variant="body2" sx={{ fontWeight: 700, whiteSpace: "nowrap" }}>
+                        {c.n}{" "}
+                        <Box component="span" sx={{ fontWeight: 500, color: "text.secondary" }}>
+                          ({pct}%)
+                        </Box>
                       </Typography>
-                    </Tooltip>
-                    <Typography variant="body2" sx={{ fontWeight: 700 }}>{c.n}</Typography>
-                  </Stack>
-                  <Box sx={{ height: 6, bgcolor: "rgba(0,0,0,.06)", borderRadius: 3, overflow: "hidden" }}>
-                    <Box sx={{ width: `${pct}%`, height: "100%", bgcolor: hue, borderRadius: 3 }} />
-                  </Box>
-                </Box>
-              );
-            })}
-          </Box>
+                    </Stack>
+                  );
+                })}
+                <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between",
+                                             pt: 1, borderTop: "1px solid rgba(15,23,42,.08)" }}>
+                  <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600 }}>Total</Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 800 }}>{cameraTotal}</Typography>
+                </Stack>
+              </Box>
+            </Stack>
+          )}
         </Panel>
       </Grid>
 
