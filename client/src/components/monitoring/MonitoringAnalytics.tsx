@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { Box, Grid, Paper, Skeleton, Stack, Tooltip, Typography } from "@mui/material";
 import {
-  Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, LabelList, Pie, PieChart,
+  Bar, BarChart, CartesianGrid, Cell, LabelList, Line, LineChart, Pie, PieChart,
   ResponsiveContainer, Tooltip as RTooltip, XAxis, YAxis,
 } from "recharts";
 import { contentCardSx } from "../../lib/uiSurfaces";
@@ -104,28 +104,25 @@ export function MonitoringAnalytics({
       <Grid size={{ xs: 12, md: 6 }}>
         <Panel title="Detections per day" subtitle="Daily totals across the selected range">
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={daily} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
-              <defs>
-                <linearGradient id={`ga-${module.key}`} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={hue} stopOpacity={0.35} />
-                  <stop offset="100%" stopColor={hue} stopOpacity={0.02} />
-                </linearGradient>
-              </defs>
+            {/* A line, not a filled area: the fill implied a running total, and
+                what these are is a count taken once per day. */}
+            <LineChart data={daily} margin={{ top: 14, right: 12, left: 0, bottom: 0 }}>
               <CartesianGrid stroke={GRID} vertical={false} />
               <XAxis dataKey="label" tick={{ fontSize: 10, fill: INK }} axisLine={false} tickLine={false} minTickGap={16} />
               <YAxis allowDecimals={false} width={32} tick={{ fontSize: 10, fill: INK }} axisLine={false} tickLine={false} tickMargin={4} />
               <RTooltip formatter={(v) => [Number(v ?? 0), module.label] as [number, string]}
                         contentStyle={{ fontSize: 12, borderRadius: 8 }} />
-              <Area type="monotone" dataKey="n" stroke={hue} strokeWidth={2.5} fill={`url(#ga-${module.key})`}
-                    dot={{ r: 3, fill: hue, stroke: "#fff", strokeWidth: 1.5 }} activeDot={{ r: 5 }}>
+              <Line type="monotone" dataKey="n" stroke={hue} strokeWidth={2.5}
+                    dot={{ r: 3.5, fill: hue, stroke: "#fff", strokeWidth: 1.5 }} activeDot={{ r: 5.5 }}
+                    isAnimationActive={false}>
                 {/* The design labels every point. It is only readable because
                     these panels plot a handful of days - Recharts will collide
                     labels rather than thin them, so this stays off the 24-bar
                     hourly chart at narrow widths. */}
                 <LabelList dataKey="n" position="top" offset={8}
                            style={{ fontSize: 10, fontWeight: 700, fill: INK }} />
-              </Area>
-            </AreaChart>
+              </Line>
+            </LineChart>
           </ResponsiveContainer>
         </Panel>
       </Grid>

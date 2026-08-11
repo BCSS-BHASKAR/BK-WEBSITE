@@ -1,12 +1,12 @@
 import { useCallback, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Alert, Box, Chip, Grid, LinearProgress, MenuItem, Paper, Skeleton, Snackbar,
+  Alert, Box, Chip, Grid, MenuItem, Paper, Skeleton, Snackbar,
   Stack, Tab, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   Tabs, TextField, Tooltip, Typography, Pagination, IconButton,
 } from "@mui/material";
 import {
-  Area, AreaChart, Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer,
+  Bar, BarChart, Line, LineChart, CartesianGrid, Legend, ResponsiveContainer,
   Tooltip as RTooltip, XAxis, YAxis,
 } from "recharts";
 import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
@@ -17,6 +17,7 @@ import { api, apiBase } from "../lib/api";
 import { pageLayoutSx, contentCardSx } from "../lib/uiSurfaces";
 import { MODULE_BY_KEY } from "../lib/inferenceModules";
 import { MonitoringMediaViewer } from "../components/monitoring/MonitoringMediaViewer";
+import { MonitoringHeader } from "../components/monitoring/MonitoringHeader";
 import type { FeedbackVerdict, MonitoringRow } from "../components/monitoring/MonitoringEventsTable";
 import { tableCellSx, tableHeadSx, thumbSx, filterFieldSx , THUMB_W, THUMB_H } from "../components/monitoring/monitoringTokens";
 import { getAccessToken } from "../auth/tokenStore";
@@ -104,9 +105,6 @@ function fmtWhen(ts: string | null | undefined) {
  * makes that one card taller than the five beside it. Dropping the separator
  * keeps the row on a single baseline.
  */
-function fmtWhenShort(ts: string | null | undefined) {
-  return fmtWhen(ts).replace(", ", " ");
-}
 function fmtHour(h: number | null) {
   return h == null ? "—" : `${String(h).padStart(2, "0")}:00`;
 }
@@ -324,31 +322,26 @@ export function ChefAbsencePage() {
   return (
     <RequirePage page="monitoring_chef_absence" label="Chef Absence">
       <Box sx={pageLayoutSx}>
-        <Box>
-          <Typography variant="h5" sx={{ fontWeight: 800 }}>Chef Absence</Typography>
-          <Typography variant="body2" color="text.secondary">{MODULE.blurb}</Typography>
-        </Box>
-
-        {/* Stated on the page, not buried in a commit message: the one number a
-            reader would reasonably expect here is the one the data cannot support. */}
-        <Alert severity="info" sx={{ borderRadius: 2 }}>
-          <strong>Absence duration is not reported.</strong> The recorder saves a clip when the
-          kitchen empties, but tags every clip 15&nbsp;fps while writing only the frames its
-          detector produced — so clip length measures the recording, not how long the station was
-          unmanned (150 of 151 clips come out under the 60&nbsp;s the detector is meant to require).
-          Incident counts, timings and uniform compliance below are unaffected.
-        </Alert>
+        {/* Same header the five template-driven Monitoring pages use, so this
+            one - which has its own page because it reports coverage rather than
+            a detection list - does not look like a different product. */}
+        <MonitoringHeader
+          module={MODULE}
+          updatedAt={kpisQ.dataUpdatedAt}
+          refreshing={kpisQ.isFetching || analyticsQ.isFetching || rowsQ.isFetching}
+          onRefresh={() => qc.invalidateQueries({ queryKey: ["chef"] })}
+        />
 
         <Grid container spacing={1.5}>
-          <Grid size={{ xs: 6, sm: 4, md: 2 }}>
+          <Grid size={{ xs: 6, sm: 4, md: 12 / 5 }}>
             <Kpi label="Absence incidents" value={k?.incidents ?? 0} hint="station left unmanned"
                  loading={kpisQ.isLoading} />
           </Grid>
-          <Grid size={{ xs: 6, sm: 4, md: 2 }}>
+          <Grid size={{ xs: 6, sm: 4, md: 12 / 5 }}>
             <Kpi label="Kitchen entries" value={k?.intrusions ?? 0} hint="snapshots captured"
                  loading={kpisQ.isLoading} />
           </Grid>
-          <Grid size={{ xs: 6, sm: 4, md: 2 }}>
+          <Grid size={{ xs: 6, sm: 4, md: 12 / 5 }}>
             <Kpi
               label="Cap compliance"
               value={k?.capCompliancePct == null ? "—" : `${k.capCompliancePct}%`}
@@ -358,16 +351,13 @@ export function ChefAbsencePage() {
               loading={kpisQ.isLoading}
             />
           </Grid>
-          <Grid size={{ xs: 6, sm: 4, md: 2 }}>
+          <Grid size={{ xs: 6, sm: 4, md: 12 / 5 }}>
             <Kpi label="People in kitchen" value={k?.peopleSeen ?? 0}
                  hint={k ? `${k.chef} chef · ${k.nonChef} non-chef` : undefined} loading={kpisQ.isLoading} />
           </Grid>
-          <Grid size={{ xs: 6, sm: 4, md: 2 }}>
+          <Grid size={{ xs: 6, sm: 4, md: 12 / 5 }}>
             <Kpi label="Peak absence hour" value={fmtHour(k?.peakHour ?? null)}
                  hint={k ? `${k.peakHourCount} incidents` : undefined} loading={kpisQ.isLoading} />
-          </Grid>
-          <Grid size={{ xs: 6, sm: 4, md: 2 }}>
-            <Kpi label="Latest incident" value={fmtWhenShort(k?.latestIncident)} loading={kpisQ.isLoading} />
           </Grid>
         </Grid>
 
@@ -426,21 +416,16 @@ export function ChefAbsencePage() {
                       <Bar dataKey="n" fill={MODULE.colour} radius={[4, 4, 0, 0]} maxBarSize={48} />
                     </BarChart>
                   ) : (
-                    <AreaChart data={daily} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
-                      <defs>
-                        <linearGradient id="ga-chef" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor={MODULE.colour} stopOpacity={0.35} />
-                          <stop offset="100%" stopColor={MODULE.colour} stopOpacity={0.02} />
-                        </linearGradient>
-                      </defs>
+                    <LineChart data={daily} margin={{ top: 4, right: 12, left: 0, bottom: 0 }}>
                       <CartesianGrid stroke={GRID} vertical={false} />
                       <XAxis dataKey="label" tick={{ fontSize: 10, fill: INK }} axisLine={false} tickLine={false} minTickGap={16} />
                       <YAxis allowDecimals={false} width={32} tick={{ fontSize: 10, fill: INK }} axisLine={false} tickLine={false} tickMargin={4} />
                       <RTooltip formatter={(v) => [Number(v ?? 0), "incidents"] as [number, string]}
                                 contentStyle={{ fontSize: 12, borderRadius: 8 }} />
-                      <Area type="monotone" dataKey="n" stroke={MODULE.colour} strokeWidth={2}
-                            fill="url(#ga-chef)" dot={false} activeDot={{ r: 4 }} />
-                    </AreaChart>
+                      <Line type="monotone" dataKey="n" stroke={MODULE.colour} strokeWidth={2.5}
+                            dot={{ r: 3.5, fill: MODULE.colour, stroke: "#fff", strokeWidth: 1.5 }}
+                            activeDot={{ r: 5.5 }} isAnimationActive={false} />
+                    </LineChart>
                   )}
                 </ResponsiveContainer>
               </Panel>
@@ -508,48 +493,15 @@ export function ChefAbsencePage() {
             </Grid>
 
             <Grid size={12}>
-              <Panel title="Uniform compliance" subtitle="Share of sightings with headwear detected, by role" height={230}>
+              <Panel title="Absence incidents by camera" subtitle="Which cameras record the station unmanned" height={230}>
                 <Box sx={{ height: "100%", overflowY: "auto", pr: 0.5 }}>
-                  {(a?.capByStatus || []).length === 0 && (
-                    <Typography variant="body2" color="text.secondary">No sightings in range.</Typography>
+                  {(a?.byCamera || []).length === 0 && (
+                    <Typography variant="body2" color="text.secondary">
+                      No camera recorded an absence in this range.
+                    </Typography>
                   )}
-                  {(a?.capByStatus || []).map((r) => {
-                    const totalN = Number(r.total) || 0;
-                    const withCap = Number(r.withCap) || 0;
-                    const pct = totalN ? (withCap / totalN) * 100 : 0;
-                    return (
-                      <Box key={r.statusChef} sx={{ mb: 1.5 }}>
-                        <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "baseline" }}>
-                          <Typography variant="body2" sx={{ fontWeight: 700, textTransform: "capitalize" }}>
-                            {r.statusChef}
-                          </Typography>
-                          {/* Direct label - the number is never left to the bar alone. */}
-                          <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                            {pct.toFixed(0)}%
-                            <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 0.75 }}>
-                              {withCap}/{totalN}
-                            </Typography>
-                          </Typography>
-                        </Stack>
-                        <LinearProgress
-                          variant="determinate" value={pct}
-                          sx={{
-                            height: 8, borderRadius: 4, mt: 0.5,
-                            bgcolor: "rgba(0,0,0,.06)",
-                            "& .MuiLinearProgress-bar": {
-                              borderRadius: 4,
-                              bgcolor: pct >= 90 ? STATUS_GOOD : STATUS_BAD,
-                            },
-                          }}
-                        />
-                      </Box>
-                    );
-                  })}
                   {(a?.byCamera || []).length > 0 && (
-                    <Box sx={{ mt: 2, pt: 1.5, borderTop: `1px solid ${GRID}` }}>
-                      <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.75 }}>
-                        Absence incidents by camera
-                      </Typography>
+                    <Box>
                       {(a?.byCamera || []).map((c) => {
                         const top = Number(a!.byCamera[0].n) || 1;
                         const pct = Math.max(2, (Number(c.n) / top) * 100);
