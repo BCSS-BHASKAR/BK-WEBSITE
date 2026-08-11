@@ -492,40 +492,6 @@ export function ChefAbsencePage() {
               </Panel>
             </Grid>
 
-            <Grid size={12}>
-              <Panel title="Absence incidents by camera" subtitle="Which cameras record the station unmanned" height={230}>
-                <Box sx={{ height: "100%", overflowY: "auto", pr: 0.5 }}>
-                  {(a?.byCamera || []).length === 0 && (
-                    <Typography variant="body2" color="text.secondary">
-                      No camera recorded an absence in this range.
-                    </Typography>
-                  )}
-                  {(a?.byCamera || []).length > 0 && (
-                    <Box>
-                      {(a?.byCamera || []).map((c) => {
-                        const top = Number(a!.byCamera[0].n) || 1;
-                        const pct = Math.max(2, (Number(c.n) / top) * 100);
-                        return (
-                          <Box key={c.cameraKey} sx={{ mb: 0.85 }}>
-                            <Stack direction="row" sx={{ justifyContent: "space-between" }}>
-                              <Tooltip title={c.cameraKey}>
-                                <Typography variant="body2" noWrap sx={{ fontWeight: 600, maxWidth: "70%" }}>
-                                  {c.cameraKey.trim()}
-                                </Typography>
-                              </Tooltip>
-                              <Typography variant="body2" sx={{ fontWeight: 700 }}>{c.n}</Typography>
-                            </Stack>
-                            <Box sx={{ height: 6, bgcolor: "rgba(0,0,0,.06)", borderRadius: 3, overflow: "hidden" }}>
-                              <Box sx={{ width: `${pct}%`, height: "100%", bgcolor: MODULE.colour, borderRadius: 3 }} />
-                            </Box>
-                          </Box>
-                        );
-                      })}
-                    </Box>
-                  )}
-                </Box>
-              </Panel>
-            </Grid>
           </Grid>
         )}
 
