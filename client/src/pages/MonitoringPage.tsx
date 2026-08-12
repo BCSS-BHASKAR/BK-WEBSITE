@@ -16,7 +16,8 @@ import { MonitoringMediaViewer } from "../components/monitoring/MonitoringMediaV
 import {
   EMPTY_FILTERS, MonitoringFilters, type MonitoringFilterState,
 } from "../components/monitoring/MonitoringFilters";
-import { previousRange, todayRange } from "../lib/rangeCompare";
+import { previousRange } from "../lib/rangeCompare";
+import { defaultLast7Range } from "../lib/dashboardRange";
 
 import { getAccessToken } from "../auth/tokenStore";
 import { useAutoRefreshMs } from "../lib/useAppSettings";
@@ -25,12 +26,12 @@ import { RequirePage, type PageKey } from "../lib/permissions";
 /**
  * What a Monitoring page opens on.
  *
- * Today rather than all time: the KPI tiles compare the selected window against
- * the one before it, and an all-time range has no "before" to measure against.
- * Reset still clears to EMPTY_FILTERS, which is genuinely everything.
+ * Last seven days rather than all time: the KPI tiles compare the selected
+ * window against the one before it, and an all-time range has no "before" to
+ * measure against. Reset still clears to EMPTY_FILTERS, which is everything.
  */
 function defaultFilters(): MonitoringFilterState {
-  const { from, to } = todayRange();
+  const { from, to } = defaultLast7Range();
   return { ...EMPTY_FILTERS, from, to };
 }
 

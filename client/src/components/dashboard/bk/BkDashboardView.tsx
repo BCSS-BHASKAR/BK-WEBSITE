@@ -116,7 +116,9 @@ export function BkDashboardView({ from, to }: { from?: string; to?: string }) {
   const navigate = useNavigate();
   const refetchInterval = useAutoRefreshMs();
   const { can } = usePermissions();
-  const [grain, setGrain] = useState<TrendGrain>("day");
+  // "Week" is the 7-day view; "Day" is hour-by-hour for today, which on a quiet
+  // morning is a nearly flat line and a poor thing to land on.
+  const [grain, setGrain] = useState<TrendGrain>("week");
   const [intruderIndex, setIntruderIndex] = useState<number | null>(null);
 
   // Each endpoint sits behind its own RBAC grant (server/src/lib/pages.js), so

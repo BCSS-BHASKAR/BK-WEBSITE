@@ -17,7 +17,8 @@ import { MonitoringMediaViewer } from "../components/monitoring/MonitoringMediaV
 import { filterFieldSx } from "../components/monitoring/monitoringTokens";
 import { useAutoRefreshMs } from "../lib/useAppSettings";
 import { KpiDelta } from "../components/KpiDelta";
-import { buildDelta, previousRange, todayRange } from "../lib/rangeCompare";
+import { buildDelta, previousRange } from "../lib/rangeCompare";
+import { defaultLast7Range } from "../lib/dashboardRange";
 
 // Active Alerts is the cross-module view of everything that warrants attention.
 //
@@ -61,9 +62,10 @@ export function ActiveAlertsPage() {
   const qc = useQueryClient();
   const refetchInterval = useAutoRefreshMs();
   const [service, setService] = useState<string>("");
-  // Today by default, so the tiles have a preceding period to compare against.
-  const [from, setFrom] = useState(() => todayRange().from);
-  const [to, setTo] = useState(() => todayRange().to);
+  // Seven days by default, matching the dashboard and the Monitoring pages, and
+  // giving the tiles a preceding period to compare against.
+  const [from, setFrom] = useState(() => defaultLast7Range().from);
+  const [to, setTo] = useState(() => defaultLast7Range().to);
   const [camera, setCamera] = useState("");
   const [page, setPage] = useState(1);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
